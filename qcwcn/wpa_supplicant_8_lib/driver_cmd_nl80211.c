@@ -184,7 +184,8 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			ret = 0;
 			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
 			    (os_strcasecmp(cmd, "RSSI") == 0) ||
-			    (os_strcasecmp(cmd, "GETBAND") == 0) )
+			    (os_strcasecmp(cmd, "GETBAND") == 0) ||
+			    (os_strcasecmp(cmd, "P2P_BEST_CHANNEL") == 0))
 				ret = strlen(buf);
 			else if (os_strcasecmp(cmd, "COUNTRY") == 0)
 				wpa_supplicant_event(drv->ctx,

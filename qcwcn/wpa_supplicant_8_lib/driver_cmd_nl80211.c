@@ -13,6 +13,7 @@
 #include "driver_nl80211.h"
 #include "wpa_supplicant_i.h"
 #include "config.h"
+#include "driver.h"
 #ifdef ANDROID
 #include "android_drv.h"
 #endif
@@ -186,6 +187,16 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			    (os_strcasecmp(cmd, "RSSI") == 0) ||
 			    (os_strcasecmp(cmd, "GETBAND") == 0) )
 				ret = strlen(buf);
+			else if (os_strncasecmp(cmd, "P2P_BEST_CHANNEL", 16) == 0) {
+				int chan[3];
+				union wpa_event_data event;
+				sscanf(buf, "%d %d %d", &chan[0], &chan[1], &chan[2]);
+				event.best_chan.freq_24 = chan[0];
+				event.best_chan.freq_5 = chan[1];
+				event.best_chan.freq_overall = chan[2];
+				wpa_supplicant_event(drv->ctx, EVENT_BEST_CHANNEL, &event);
+				ret = strlen(buf);
+			}
 			else if (os_strcasecmp(cmd, "COUNTRY") == 0)
 				wpa_supplicant_event(drv->ctx,
 					EVENT_CHANNEL_LIST_CHANGED, NULL);

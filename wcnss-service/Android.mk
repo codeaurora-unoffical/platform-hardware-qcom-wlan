@@ -1,5 +1,5 @@
 ifeq ($(TARGET_ARCH),arm)
-ifeq ($(call is-board-platform-in-list,msm8974),true)
+ifeq ($(call is-board-platform-in-list,msm8974 msm8226 msm8610),true)
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_MODULE := wcnss_service

@@ -32,6 +32,13 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/stat.h>
 #define LOG_TAG "wcnss_service"
 #include <cutils/log.h>
+#ifdef WCNSS_QMI
+#include <dirent.h>
+#include <grp.h>
+#include <utime.h>
+#include <cutils/properties.h>
+#include "wcnss_qmi_client.h"
+#endif
 
 #define SUCCESS 0
 #define FAILED -1
@@ -41,6 +48,88 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define WCNSS_FACT_FILE "/data/misc/wifi/WCN_FACTORY"
 #define WCNSS_DEVICE    "/dev/wcnss_wlan"
 
+#ifdef WCNSS_QMI
+#define MAX_FILE_LENGTH 1024
+#define WLAN_ADDR_SIZE   6
+unsigned char wlan_nv_mac_addr[WLAN_ADDR_SIZE];
+#define MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+#define MAC_ADDRESS_STR "%02x:%02x:%02x:%02x:%02x:%02x"
+
+/* As Want to write in 00:0a:f5:11:22:33 fortmat in sysfs file
+   so taking mac length as 12 char + 5 for ":" + NULL
+ */
+#define WLAN_MAC_ADDR_STRING 18
+
+void find_full_path(char *cur_dir, char *file_to_find, char *full_path)
+{
+	DIR *dir;
+	struct stat st;
+	struct dirent *dr;
+	char cwd[1024];
+	int rc;
+
+	chdir(cur_dir);
+
+	dir = opendir(".");
+
+	while ((dr = readdir(dir))) {
+
+		rc = lstat(dr->d_name, &st);
+		if (rc < 0) {
+			ALOGE("lstat failed %s", strerror(errno));
+			return;
+		}
+		if (S_ISDIR(st.st_mode)) {
+			if ((strcmp(dr->d_name, ".")) &&
+					(strcmp(dr->d_name, ".."))) {
+				find_full_path(dr->d_name,
+						file_to_find, full_path);
+			}
+		} else if (!strcmp(file_to_find, dr->d_name)) {
+			getcwd(cwd, sizeof(cwd));
+			snprintf(full_path, MAX_FILE_LENGTH, "%s/%s",
+					cwd, file_to_find);
+		}
+	}
+	closedir(dir);
+
+	chdir("..");
+}
+
+void setup_wcnss_macaddress()
+{
+	char fpath[MAX_FILE_LENGTH];
+	char mac_addr[WLAN_MAC_ADDR_STRING];
+	char *pstr;
+	int fd;
+
+	find_full_path("/sys/devices", "wcnss_mac_addr", fpath);
+
+	pstr = strstr(fpath, "wcnss");
+	if (pstr == NULL) {
+		ALOGE("Failed to find wcnss_mac_addr node");
+		return;
+	}
+
+	ALOGE("Mac Address node %s", fpath);
+	snprintf(mac_addr, WLAN_MAC_ADDR_STRING,
+		MAC_ADDRESS_STR,
+		MAC_ADDR_ARRAY(wlan_nv_mac_addr));
+
+	fd = open(fpath, O_WRONLY);
+	if (fd < 0) {
+		ALOGE("Failed to open %s : %s", fpath, strerror(errno));
+		return;
+	}
+
+	if (write(fd, mac_addr, WLAN_MAC_ADDR_STRING) < 0) {
+		ALOGE("Failed to write to %s : %s", fpath, strerror(errno));
+		close(fd);
+		return;
+	}
+	close(fd);
+}
+#endif
 
 int wcnss_write_cal_data(int fd_dev)
 {
@@ -185,6 +274,26 @@ int main(int argc, char *argv[])
 	int rc;
 	int fd_dev;
 	struct stat st;
+
+#ifdef WCNSS_QMI
+	/* initialize the DMS client and request the wlan mac address */
+
+	if (SUCCESS == wcnss_init_qmi()) {
+
+		rc = wcnss_qmi_get_wlan_address(wlan_nv_mac_addr);
+
+		if (rc == SUCCESS) {
+			ALOGE("WLAN MAC Addr:" MAC_ADDRESS_STR,
+				MAC_ADDR_ARRAY(wlan_nv_mac_addr));
+			setup_wcnss_macaddress();
+		} else
+			ALOGE("Failed to Get MAC addr from modem");
+
+		wcnss_qmi_deinit();
+	}
+	else
+		ALOGE("Failed to Initialize wcnss QMI Interface");
+#endif
 
 	fd_dev = open(WCNSS_DEVICE, O_RDWR);
 	if (fd_dev < 0) {

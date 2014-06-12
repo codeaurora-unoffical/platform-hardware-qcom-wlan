@@ -42,6 +42,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 	struct ifreq ifr;
 	android_wifi_priv_cmd priv_cmd;
 	int ret = 0;
+	union wpa_event_data data;
 
 	if (os_strcasecmp(cmd, "STOP") == 0) {
 		linux_set_iface_flags(drv->global->ioctl_sock, bss->ifname, 0);
@@ -80,8 +81,10 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 				   (os_strncasecmp(cmd, "SETBAND", 7) == 0) ||
 				   (os_strncasecmp(cmd, "SETCOUNTRYREV", 13) == 0)) {
 				wpa_printf(MSG_DEBUG, "%s: %s", __func__, cmd);
+				data.channel_list_changed.initiator =
+						REGDOM_SET_BY_USER;
 				wpa_supplicant_event(drv->ctx,
-					EVENT_CHANNEL_LIST_CHANGED, NULL);
+					EVENT_CHANNEL_LIST_CHANGED, &data);
 			} else if (os_strcasecmp(cmd, "P2P_DEV_ADDR") == 0)
 				wpa_printf(MSG_DEBUG, "%s: P2P: Device address ("MACSTR")",
 					__func__, MAC2STR(buf));

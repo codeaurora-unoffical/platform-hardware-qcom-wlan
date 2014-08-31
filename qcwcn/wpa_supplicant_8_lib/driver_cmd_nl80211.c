@@ -17,6 +17,12 @@
 #include "android_drv.h"
 #endif
 
+/* Return type for setBand*/
+enum {
+	SEND_CHANNEL_CHANGE_EVENT = 0,
+	DO_NOT_SEND_CHANNEL_CHANGE_EVENT,
+};
+
 typedef struct android_wifi_priv_cmd {
 	char *buf;
 	int used_len;
@@ -77,6 +83,11 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			wpa_printf(MSG_ERROR, "%s: failed to issue private commands\n", __func__);
 		} else {
 			drv_errors = 0;
+			if((os_strncasecmp(cmd, "SETBAND", 7) == 0) &&
+				ret == DO_NOT_SEND_CHANNEL_CHANGE_EVENT) {
+				return 0;
+			}
+
 			ret = 0;
 			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
 			    (os_strcasecmp(cmd, "RSSI") == 0) ||

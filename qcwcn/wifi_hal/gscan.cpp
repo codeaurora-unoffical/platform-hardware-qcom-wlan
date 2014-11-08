@@ -30,6 +30,8 @@
 GScanCommandEventHandler *GScanStartCmdEventHandler = NULL;
 GScanCommandEventHandler *GScanSetBssidHotlistCmdEventHandler = NULL;
 GScanCommandEventHandler *GScanSetSignificantChangeCmdEventHandler = NULL;
+wifi_gscan_capabilities Capabilities;
+bool CapabilitiesUpdated;
 
 /* Implementation of the API functions exposed in gscan.h */
 wifi_error wifi_get_valid_channels(wifi_interface_handle handle,
@@ -42,6 +44,7 @@ wifi_error wifi_get_valid_channels(wifi_interface_handle handle,
     wifi_handle wifiHandle = getWifiHandle(handle);
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGI("GSCAN : Get valid channels");
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
@@ -116,18 +119,23 @@ cleanup:
 
 void get_gscan_capabilities_cb(int status, wifi_gscan_capabilities capa)
 {
-    ALOGD("%s: Status = %d.", __func__, status);
-    ALOGD("%s: Capabilities. max_ap_cache_per_scan:%d, "
-            "max_bssid_history_entries:%d, max_hotlist_aps:%d, "
-            "max_rssi_sample_size:%d, max_scan_buckets:%d, "
-            "max_scan_cache_size:%d, max_scan_reporting_threshold:%d, "
-            "max_significant_wifi_change_aps:%d.",
-            __func__, capa.max_ap_cache_per_scan,
-            capa.max_bssid_history_entries,
-            capa.max_hotlist_aps, capa.max_rssi_sample_size,
-            capa.max_scan_buckets,
-            capa.max_scan_cache_size, capa.max_scan_reporting_threshold,
+    ALOGI("%s: Status = %d\n", __func__, status);
+    ALOGI("************** Capabilities *************");
+    ALOGI("max_ap_cache_per_scan            :   %d",
+            capa.max_ap_cache_per_scan);
+    ALOGI("max_bssid_history_entries        :   %d",
+            capa.max_bssid_history_entries);
+    ALOGI("max_hotlist_aps                  :   %d", capa.max_hotlist_aps);
+    ALOGI("max_rssi_sample_size             :   %d", capa.max_rssi_sample_size);
+    ALOGI("max_scan_buckets                 :   %d", capa.max_scan_buckets);
+    ALOGI("max_scan_cache_size              :   %d", capa.max_scan_cache_size);
+    ALOGI("max_scan_reporting_threshold     :   %d",
+            capa.max_scan_reporting_threshold);
+    ALOGI("max_significant_wifi_change_aps  :   %d",
             capa.max_significant_wifi_change_aps);
+    ALOGI("************ Capabilities end ************");
+    memcpy(&Capabilities, &capa, sizeof(wifi_gscan_capabilities));
+    CapabilitiesUpdated = true;
 }
 
 wifi_error wifi_get_gscan_capabilities(wifi_interface_handle handle,
@@ -141,6 +149,7 @@ wifi_error wifi_get_gscan_capabilities(wifi_interface_handle handle,
     wifi_handle wifiHandle = getWifiHandle(handle);
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGI("GSCAN : Get Capabilities");
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
@@ -223,6 +232,121 @@ cleanup:
     return (wifi_error)ret;
 }
 
+wifi_error GScanCommand::validateGscanConfig(wifi_scan_cmd_params params)
+{
+    if (!CapabilitiesUpdated)
+    {
+        ALOGE("Capabilities aren't obtained yet to validate"
+                " the input parameters");
+        return WIFI_SUCCESS;
+    }
+
+    if (params.base_period < GSCAN_BASE_PERIOD_MIN) {
+        ALOGE("%s: Base period out of valid range : %d", __func__,
+                 params.base_period);
+        ALOGI("Valid Range : Minimum : %d", GSCAN_BASE_PERIOD_MIN);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    if (params.max_ap_per_scan < GSCAN_MAX_AP_PER_SCAN_MIN
+            || params.max_ap_per_scan > Capabilities.max_ap_cache_per_scan) {
+        ALOGE("%s: max_ap_per_scan out of valid range : %d", __func__,
+                 params.max_ap_per_scan);
+        ALOGI("Valid Range : Minimum : %d", GSCAN_MAX_AP_PER_SCAN_MIN);
+        ALOGI("            : Maximum : %d", Capabilities.max_ap_cache_per_scan);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    if (params.report_threshold < GSCAN_REPORT_THRESHOLD_MIN
+       || params.report_threshold > Capabilities.max_scan_reporting_threshold) {
+        ALOGE("%s: report_threshold out of valid range : %d", __func__,
+                 params.report_threshold);
+        ALOGI("Valid Range : Minimum : %d", GSCAN_REPORT_THRESHOLD_MIN);
+        ALOGI("            : Maximum : %d", Capabilities.max_scan_reporting_threshold);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    if (params.num_buckets < GSCAN_NUM_BUCKETS_MIN
+            || params.num_buckets > Capabilities.max_scan_buckets) {
+        ALOGE("%s: num_buckets out of valid range : %d", __func__,
+                 params.num_buckets);
+        ALOGI("Valid Range : Minimum : %d", GSCAN_NUM_BUCKETS_MIN);
+        ALOGI("            : Maximum : %d", Capabilities.max_scan_buckets);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+
+    for(int i=0; i<params.num_buckets; i++)
+    {
+        if (params.buckets[i].bucket < GSCAN_BUCKET_INDEX_MIN) {
+            ALOGE("%s: buckets[%d].bucket out of valid range : %d", __func__,
+                    i, params.buckets[i].bucket);
+            ALOGI("Valid Range : Minimum : %d", GSCAN_BUCKET_INDEX_MIN);
+            return WIFI_ERROR_INVALID_ARGS;
+        }
+        switch(params.buckets[i].band)
+        {
+            case WIFI_BAND_UNSPECIFIED:
+            case WIFI_BAND_BG:
+            case WIFI_BAND_A:
+            case WIFI_BAND_A_DFS:
+            case WIFI_BAND_A_WITH_DFS:
+            case WIFI_BAND_ABG:
+            case WIFI_BAND_ABG_WITH_DFS:
+                break;
+            default:
+                ALOGE("%s: buckets[%d].band out of valid range : %d", __func__,
+                        i, params.buckets[i].band);
+                ALOGI("Supported bands : ");
+                ALOGI("WIFI_BAND_UNSPECIFIED  value: %d", WIFI_BAND_UNSPECIFIED);
+                ALOGI("WIFI_BAND_BG           value: %d", WIFI_BAND_BG);
+                ALOGI("WIFI_BAND_A            value: %d", WIFI_BAND_A);
+                ALOGI("WIFI_BAND_ABG          value: %d", WIFI_BAND_ABG);
+                ALOGI("WIFI_BAND_A_DFS        value: %d", WIFI_BAND_A_DFS);
+                ALOGI("WIFI_BAND_A_WITH_DFS   value: %d", WIFI_BAND_A_WITH_DFS);
+                ALOGI("WIFI_BAND_ABG_WITH_DFS value: %d", WIFI_BAND_ABG_WITH_DFS);
+                return WIFI_ERROR_INVALID_ARGS;
+        }
+        if (params.buckets[i].period < params.base_period) {
+            ALOGE("%s: buckets[%d].period out of valid range : %d", __func__,
+                    i, params.buckets[i].period);
+            ALOGI("Valid Range : Minimum : %d", params.base_period);
+            return WIFI_ERROR_INVALID_ARGS;
+        }
+        if (params.buckets[i].report_events > 3) {
+            ALOGE("%s: buckets[%d].report_events is out of valid range : %d",
+                   __func__, i, params.buckets[i].report_events);
+            ALOGI("Valid Report events: %d, %d, %d", GSCAN_REPORT_EVENT0,
+                    GSCAN_REPORT_EVENT1, GSCAN_REPORT_EVENT2);
+            return WIFI_ERROR_INVALID_ARGS;
+        }
+        if (params.buckets[i].num_channels < GSCAN_MIN_CHANNELS
+                || params.buckets[i].num_channels > (int)MAX_CHANNELS) {
+            ALOGE("%s: buckets[%d].num_channels is out of valid range : %d",
+                     __func__, i, params.buckets[i].num_channels);
+            ALOGI("Valid Range : Minimum channels : %d", GSCAN_MIN_CHANNELS);
+            ALOGI("            : Maximum channels : %d", (int)MAX_CHANNELS);
+            return WIFI_ERROR_INVALID_ARGS;
+        }
+
+        for(int j=0; j<params.buckets[i].num_channels; j++)
+        {
+            if (params.buckets[i].channels[j].passive != GSCAN_ACTIVE_SCAN &&
+                params.buckets[i].channels[j].passive != GSCAN_PASSIVE_SCAN) {
+                ALOGE("%s: params.buckets[%d].channels[%d].channel "
+                        " : %d", __func__, i, j,
+                        params.buckets[i].channels[j].channel);
+                ALOGE("%s: params.buckets[%d].channels[%d].dwellTimeMs"
+                        " : %d", __func__, i, j,
+                    params.buckets[i].channels[j].dwellTimeMs);
+                ALOGE("%s: params.buckets[%d].channels[%d].passive is out of"
+                      " valid range : %d", __func__, i, j,
+                      params.buckets[i].num_channels);
+                ALOGI("Valid Values :Active scan : %d", GSCAN_ACTIVE_SCAN);
+                ALOGI("             :Passive scan : %d", GSCAN_PASSIVE_SCAN);
+                return WIFI_ERROR_INVALID_ARGS;
+            }
+        }
+    }
+    return WIFI_SUCCESS;
+}
+
 void start_gscan_cb(int status)
 {
     ALOGD("%s: Status = %d.", __func__, status);
@@ -245,6 +369,7 @@ wifi_error wifi_start_gscan(wifi_request_id id,
     bool previousGScanRunning = false;
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGI("GSCAN : start");
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
@@ -267,6 +392,10 @@ wifi_error wifi_start_gscan(wifi_request_id id,
         ALOGE("wifi_start_gscan(): Error GScanCommand NULL");
         return WIFI_ERROR_UNKNOWN;
     }
+
+    ret = gScanCommand->validateGscanConfig(params);
+    if (ret < 0)
+        goto cleanup;
 
     GScanCallbackHandler callbackHandler;
     memset(&callbackHandler, 0, sizeof(callbackHandler));
@@ -450,13 +579,12 @@ wifi_error wifi_stop_gscan(wifi_request_id id,
     wifi_handle wifiHandle = getWifiHandle(iface);
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGI("GSCAN : stop, halHandle = %p", wifiHandle);
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
         return WIFI_ERROR_NOT_SUPPORTED;
     }
-
-    ALOGI("Stopping GScan, halHandle = %p", wifiHandle);
 
     if (GScanStartCmdEventHandler == NULL) {
         ALOGE("wifi_stop_gscan: GSCAN isn't running or already stopped. "
@@ -518,7 +646,8 @@ wifi_error wifi_stop_gscan(wifi_request_id id,
         ALOGE("%s: requestEvent Error:%d",__func__, ret);
         if (ret == ETIMEDOUT)
         {
-            /* Delete different GSCAN event handlers for the specified Request ID. */
+            /* Delete different GSCAN event handlers for the
+               specified Request ID. */
             if (GScanStartCmdEventHandler) {
                 delete GScanStartCmdEventHandler;
                 GScanStartCmdEventHandler = NULL;
@@ -546,6 +675,27 @@ cleanup:
     return (wifi_error)ret;
 }
 
+wifi_error GScanCommand::validateHotlistBssidParams(
+    wifi_bssid_hotlist_params params)
+{
+    if (!CapabilitiesUpdated)
+    {
+        ALOGE("Capabilities aren't obtained yet to validate"
+                " the input parameters");
+        return WIFI_SUCCESS;
+    }
+
+    if (params.num_ap < BSSID_HOTLIST_NUM_AP_MIN
+            || params.num_ap > Capabilities.max_hotlist_aps) {
+        ALOGE("%s: num_ap out of valid range : %d", __func__,
+                 params.num_ap);
+        ALOGI("Valid Range : Minimum : %d", BSSID_HOTLIST_NUM_AP_MIN);
+        ALOGI("            : Maximum : %d", Capabilities.max_hotlist_aps);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    return WIFI_SUCCESS;
+}
+
 void set_bssid_hotlist_cb(int status)
 {
     ALOGD("%s: Status = %d.", __func__, status);
@@ -565,13 +715,13 @@ wifi_error wifi_set_bssid_hotlist(wifi_request_id id,
     bool previousGScanSetBssidRunning = false;
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGD("GSCAN : set BSSID hotlist, halHandle = %p", wifiHandle);
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
         return WIFI_ERROR_NOT_SUPPORTED;
     }
 
-    ALOGD("Setting GScan BSSID Hotlist, halHandle = %p", wifiHandle);
 
     /* Wi-Fi HAL doesn't need to check if a similar request to set bssid
      * hotlist was made earlier. If set_bssid_hotlist() is called while
@@ -591,6 +741,10 @@ wifi_error wifi_set_bssid_hotlist(wifi_request_id id,
         ALOGE("%s: Error GScanCommand NULL", __func__);
         return WIFI_ERROR_UNKNOWN;
     }
+
+    ret = gScanCommand->validateHotlistBssidParams(params);
+    if (ret < 0)
+        goto cleanup;
 
     GScanCallbackHandler callbackHandler;
     memset(&callbackHandler, 0, sizeof(callbackHandler));
@@ -743,13 +897,12 @@ wifi_error wifi_reset_bssid_hotlist(wifi_request_id id,
     wifi_handle wifiHandle = getWifiHandle(iface);
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGI("GSCAN: Reset BSSID Hotlist, halHandle = %p", wifiHandle);
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
         return WIFI_ERROR_NOT_SUPPORTED;
     }
-
-    ALOGE("Resetting GScan BSSID Hotlist, halHandle = %p", wifiHandle);
 
     if (GScanSetBssidHotlistCmdEventHandler == NULL) {
         ALOGE("wifi_reset_bssid_hotlist: GSCAN bssid_hotlist isn't set. "
@@ -836,6 +989,56 @@ cleanup:
     return (wifi_error)ret;
 }
 
+wifi_error GScanCommand::validateSignificantChangeParams(
+    wifi_significant_change_params params)
+{
+    if (!CapabilitiesUpdated)
+    {
+        ALOGE("Capabilities aren't obtained yet to validate"
+                " the input parameters");
+        return WIFI_SUCCESS;
+    }
+
+    if (params.num_ap < SIGNIFICANT_CHANGE_NUM_AP_MIN
+            || params.num_ap > Capabilities.max_significant_wifi_change_aps) {
+        ALOGE("%s: num_ap out of valid range : %d", __func__,
+                 params.num_ap);
+        ALOGI("Valid Range : Minimum : %d", SIGNIFICANT_CHANGE_NUM_AP_MIN);
+        ALOGI("            : Maximum : %d",
+                Capabilities.max_significant_wifi_change_aps);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    if (params.rssi_sample_size < RSSI_SAMPLE_SIZE_MIN
+            || params.rssi_sample_size > Capabilities.max_rssi_sample_size) {
+        ALOGE("%s: rssi_sample_size is out of valid range : %d", __func__,
+                 params.rssi_sample_size);
+        ALOGI("Valid Range : Minimum : %d", RSSI_SAMPLE_SIZE_MIN);
+        ALOGI("            : Maximum : %d",
+                Capabilities.max_rssi_sample_size);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    if (params.lost_ap_sample_size < LOSTAP_SAMPLE_SIZE_MIN
+            || params.lost_ap_sample_size >
+            Capabilities.max_bssid_history_entries) {
+        ALOGE("%s: lost_ap_sample_size is out of valid range : %d", __func__,
+                 params.lost_ap_sample_size);
+        ALOGI("Valid Range : Minimum : %d", LOSTAP_SAMPLE_SIZE_MIN);
+        ALOGI("            : Maximum : %d",
+                Capabilities.max_bssid_history_entries);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    if (params.min_breaching < MIN_BREACHING_MIN
+            || params.min_breaching > params.num_ap) {
+        ALOGE("%s: params.min_breaching out of valid range : %d", __func__,
+                 params.min_breaching);
+        ALOGI("Valid Range : Minimum : %d", MIN_BREACHING_MIN);
+        ALOGI("            : Maximum : %d",
+                params.num_ap);
+        return WIFI_ERROR_INVALID_ARGS;
+    }
+    return WIFI_SUCCESS;
+}
+
 void set_significant_change_cb(int status)
 {
     ALOGD("%s: Status = %d.", __func__, status);
@@ -855,13 +1058,12 @@ wifi_error wifi_set_significant_change_handler(wifi_request_id id,
     bool previousGScanSetSigChangeRunning = false;
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGE("GSCAN: Set Significant Change, halHandle = %p", wifiHandle);
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
         return WIFI_ERROR_NOT_SUPPORTED;
     }
-
-    ALOGE("Setting GScan Significant Change, halHandle = %p", wifiHandle);
 
     /* Wi-Fi HAL doesn't need to check if a similar request to set significant
      * change list was made earlier. If set_significant_change() is called while
@@ -880,6 +1082,10 @@ wifi_error wifi_set_significant_change_handler(wifi_request_id id,
         ALOGE("%s: Error GScanCommand NULL", __func__);
         return WIFI_ERROR_UNKNOWN;
     }
+
+    ret = gScanCommand->validateSignificantChangeParams(params);
+    if (ret < 0)
+        goto cleanup;
 
     GScanCallbackHandler callbackHandler;
     memset(&callbackHandler, 0, sizeof(callbackHandler));
@@ -1043,13 +1249,12 @@ wifi_error wifi_reset_significant_change_handler(wifi_request_id id,
     wifi_handle wifiHandle = getWifiHandle(iface);
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGD("GSCAN: Reset Significant Change, halHandle = %p", wifiHandle);
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
         return WIFI_ERROR_NOT_SUPPORTED;
     }
-
-    ALOGD("Resetting GScan Significant Change, halHandle = %p", wifiHandle);
 
     if (GScanSetSignificantChangeCmdEventHandler == NULL) {
         ALOGE("wifi_reset_significant_change_handler: GSCAN significant_change"
@@ -1163,6 +1368,7 @@ wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface,
     wifi_handle wifiHandle = getWifiHandle(iface);
     hal_info *info = getHalInfo(wifiHandle);
 
+    ALOGE("GSCAN: Get Cached Results, halHandle = %p", wifiHandle);
     if (!(info->supported_feature_set & WIFI_FEATURE_GSCAN)) {
         ALOGE("%s: GSCAN is not supported by driver",
             __func__);
@@ -1175,12 +1381,11 @@ wifi_error wifi_get_cached_gscan_results(wifi_interface_handle iface,
         return WIFI_ERROR_INVALID_ARGS;
     }
 
-    /* No request id from caller, so generate one and pass it on to the driver. */
-    /* Generate it randomly */
+    /* No request id from caller, so generate one randomly and pass it on
+     * to the driver
+     */
     srand(time(NULL));
     requestId = rand();
-
-    ALOGE("Getting GScan Cached Results, halHandle = %p", wifiHandle);
 
     gScanCommand = new GScanCommand(
                         wifiHandle,
@@ -1311,6 +1516,7 @@ wifi_error wifi_set_scanning_mac_oui(wifi_interface_handle handle, oui scan_oui)
     interface_info *iinfo = getIfaceInfo(handle);
     wifi_handle wifiHandle = getWifiHandle(handle);
 
+    ALOGI("GSCAN: Set scanning MAC OUI, halHandle = %p", wifiHandle);
     vCommand = new WifiVendorCommand(wifiHandle, 0,
             OUI_QCA,
             QCA_NL80211_VENDOR_SUBCMD_SCANNING_MAC_OUI);
@@ -1702,8 +1908,8 @@ int GScanCommand::gscan_get_cached_results(u32 num_results,
     return WIFI_SUCCESS;
 }
 
-/* This function will be the main handler for incoming (from driver)  GSscan_SUBCMD.
- *  Calls the appropriate callback handler after parsing the vendor data.
+/* This function will be the main handler for incoming(from driver) GSCAN_SUBCMD
+ * Calls the appropriate callback handler after parsing the vendor data.
  */
 int GScanCommand::handleEvent(WifiEvent &event)
 {
@@ -1823,8 +2029,9 @@ int GScanCommand::handleEvent(WifiEvent &event)
                 break;
             }
             mGetCapabilitiesRspParams->capabilities.max_scan_cache_size =
-                nla_get_u32(tbVendor[
-                QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_SCAN_CACHE_SIZE]);
+            nla_get_u32(tbVendor[
+            QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_SCAN_CACHE_SIZE
+            ]);
 
             if (!tbVendor[
             QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_SCAN_BUCKETS
@@ -1836,8 +2043,8 @@ int GScanCommand::handleEvent(WifiEvent &event)
             }
             mGetCapabilitiesRspParams->capabilities.max_scan_buckets =
                 nla_get_u32(tbVendor[
-                QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_SCAN_BUCKETS]
-                                );
+                QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_SCAN_BUCKETS
+                ]);
 
             if (!tbVendor[
         QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_AP_CACHE_PER_SCAN
@@ -1849,7 +2056,8 @@ int GScanCommand::handleEvent(WifiEvent &event)
             }
             mGetCapabilitiesRspParams->capabilities.max_ap_cache_per_scan =
                     nla_get_u32(tbVendor[
-                QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_AP_CACHE_PER_SCAN]);
+           QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_AP_CACHE_PER_SCAN
+            ]);
 
             if (!tbVendor[
             QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_RSSI_SAMPLE_SIZE
@@ -1860,8 +2068,9 @@ int GScanCommand::handleEvent(WifiEvent &event)
                 break;
             }
             mGetCapabilitiesRspParams->capabilities.max_rssi_sample_size =
-                    nla_get_u32(tbVendor[
-                    QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_RSSI_SAMPLE_SIZE]);
+            nla_get_u32(tbVendor[
+            QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_RSSI_SAMPLE_SIZE
+            ]);
 
             if (!tbVendor[
             QCA_WLAN_VENDOR_ATTR_GSCAN_RESULTS_CAPABILITIES_MAX_SCAN_REPORTING_THRESHOLD
@@ -2034,7 +2243,7 @@ int GScanCommand::handleEvent(WifiEvent &event)
                 if (ret)
                     break;
             }
-            /* Send the results if no more result data fragments are expected. */
+            /* Send the results if no more result data fragments are expected */
             if (mHandler.get_cached_results) {
                 (*mHandler.get_cached_results)
                     (mGetCachedResultsRspParams->more_data,
@@ -2243,7 +2452,8 @@ wifi_error GScanCommand::getGetCachedResultsRspParams(
     if (mGetCachedResultsRspParams && results)
     {
         *moreData = mGetCachedResultsRspParams->more_data;
-        *numResults = mGetCachedResultsRspParams->num_results > (unsigned int)max ?
+        *numResults =
+             mGetCachedResultsRspParams->num_results > (unsigned int)max ?
                         max : mGetCachedResultsRspParams->num_results;
         memcpy(results,
             mGetCachedResultsRspParams->results,

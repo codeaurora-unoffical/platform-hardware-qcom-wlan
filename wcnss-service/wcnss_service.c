@@ -30,6 +30,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <errno.h>
 #include <dirent.h>
+#include <ctype.h>
 #include <grp.h>
 #include <utime.h>
 #include <sys/stat.h>
@@ -39,6 +40,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cutils/properties.h>
 #ifdef WCNSS_QMI
 #include "wcnss_qmi_client.h"
+#include "mdm_detect.h"
 #endif
 
 #define SUCCESS 0
@@ -68,6 +70,12 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define WCNSS_HAS_CAL_DATA\
 		"/sys/module/wcnsscore/parameters/has_calibrated_data"
 #define WLAN_DRIVER_ATH_DEFAULT_VAL "0"
+
+#define ASCII_A		65
+#define ASCII_a		97
+#define ASCII_0		48
+#define HEXA_A		10
+#define HEX_BASE		16
 
 #ifdef WCNSS_QMI
 #define WLAN_ADDR_SIZE   6
@@ -329,6 +337,28 @@ out_nocopy:
 	property_set("wlan.driver.config", WLAN_INI_FILE_DEST);
 	return;
 }
+unsigned int convert_string_to_hex(char* string)
+{
+	int idx = 0;
+	unsigned long int hex_num = 0;
+	for(idx; string[idx] != '\0'; idx++){
+		if(isalpha(string[idx])) {
+			if(string[idx] >='a' && string[idx] <='f') {
+				hex_num = hex_num * HEX_BASE + ((int)string[idx]
+					       - ASCII_a + HEXA_A);
+			} else if ( string[idx] >='A' && string[idx] <='F') {
+				hex_num = hex_num * HEX_BASE + ((int)string[idx]
+						- ASCII_A + HEXA_A);
+			} else
+				hex_num = hex_num * HEX_BASE + (int)string[idx];
+		} else {
+			hex_num = hex_num * HEX_BASE + (string[idx]- ASCII_0);
+		}
+	}
+	hex_num = hex_num & 0xFFFFFFFF;
+	return hex_num;
+}
+
 
 void setup_wcnss_parameters(int *cal, int nv_mac_addr)
 {
@@ -336,7 +366,7 @@ void setup_wcnss_parameters(int *cal, int nv_mac_addr)
 	char serial[PROPERTY_VALUE_MAX];
 	int fd, rc, pos = 0;
 	struct stat st;
-	unsigned int serial_num;
+	unsigned int serial_num = 0;
 
 	fd = open(WCNSS_CTRL, O_WRONLY);
 	if (fd < 0) {
@@ -346,8 +376,8 @@ void setup_wcnss_parameters(int *cal, int nv_mac_addr)
 
 	rc = property_get("ro.serialno", serial, "");
 	if (rc) {
-
-		sscanf(serial, "%08X", &serial_num);
+		serial_num = convert_string_to_hex(serial);
+		ALOGE("Serial Number is  %x", serial_num);
 
 		msg[pos++] = WCNSS_USR_SERIAL_NUM >> BYTE_1;
 		msg[pos++] = WCNSS_USR_SERIAL_NUM >> BYTE_0;
@@ -435,16 +465,71 @@ void setup_wlan_driver_ath_prop()
 	property_set("wlan.driver.ath", WLAN_DRIVER_ATH_DEFAULT_VAL);
 }
 
+#ifdef WCNSS_QMI
+int check_modem_compatability(struct dev_info *mdm_detect_info)
+{
+	char args[MODEM_BASEBAND_PROPERTY_SIZE] = {0};
+	int ret = 0;
+	/* Get the hardware property */
+	ret = property_get(MODEM_BASEBAND_PROPERTY, args, "");
+	if (ret > MODEM_BASEBAND_PROPERTY_SIZE) {
+		ALOGE("property [%s] has size [%d] that exceeds max [%d]",
+				MODEM_BASEBAND_PROPERTY, ret, MODEM_BASEBAND_PROPERTY_SIZE);
+		return 0;
+	}
+	/* This will check for the type of hardware, and if the
+	   hardware type needs external modem, it will check if the
+	   modem type is external*/
+	if(!strncmp(MODEM_BASEBAND_VALUE_APQ, args, 3)) {
+
+		for (ret = 0; ret < mdm_detect_info->num_modems; ret++) {
+			if (mdm_detect_info->mdm_list[ret].type == MDM_TYPE_EXTERNAL) {
+				ALOGE("Hardware supports external modem");
+				return 1;
+			}
+		}
+		ALOGE("Hardware does not support external modem");
+		return 0;
+	}
+	return 1;
+}
+#endif
 
 int main(int argc, char *argv[])
 {
 	int rc;
 	int fd_dev, ret_cal;
 	int nv_mac_addr = FAILED;
+#ifdef WCNSS_QMI
+	struct dev_info mdm_detect_info;
+	int nom = 0;
+#endif
 
 	setup_wlan_config_file();
 
 #ifdef WCNSS_QMI
+	/* Call ESOC API to get the number of modems.
+	   If the number of modems is not zero, only then proceed
+	   with the eap_proxy intialization.*/
+
+	nom = get_system_info(&mdm_detect_info);
+
+	if (nom > 0)
+		ALOGE("Failed to get system info, ret %d", nom);
+
+	if (mdm_detect_info.num_modems == 0) {
+		ALOGE("wcnss_service: No Modem support for this target"
+				" number of modems is %d", mdm_detect_info.num_modems);
+		goto nomodem;
+	}
+
+	ALOGE("wcnss_service: num_modems = %d", mdm_detect_info.num_modems);
+
+	if(!check_modem_compatability(&mdm_detect_info)) {
+		ALOGE("wcnss_service: Target does not have external modem");
+		goto nomodem;
+	}
+
 	/* initialize the DMS client and request the wlan mac address */
 
 	if (SUCCESS == wcnss_init_qmi()) {
@@ -454,7 +539,7 @@ int main(int argc, char *argv[])
 		if (rc == SUCCESS) {
 			nv_mac_addr = SUCCESS;
 			ALOGE("WLAN MAC Addr:" MAC_ADDRESS_STR,
-				MAC_ADDR_ARRAY(wlan_nv_mac_addr));
+					MAC_ADDR_ARRAY(wlan_nv_mac_addr));
 		} else
 			ALOGE("Failed to Get MAC addr from modem");
 
@@ -462,6 +547,8 @@ int main(int argc, char *argv[])
 	}
 	else
 		ALOGE("Failed to Initialize wcnss QMI Interface");
+
+nomodem:
 #endif
 	setup_wcnss_parameters(&ret_cal, nv_mac_addr);
 

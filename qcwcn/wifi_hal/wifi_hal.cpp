@@ -192,6 +192,7 @@ cleanup:
 wifi_error wifi_initialize(wifi_handle *handle)
 {
     int err = 0;
+    int disable = 1;
     bool driver_loaded = false;
     wifi_error ret = WIFI_SUCCESS;
     wifi_interface_handle iface_handle;
@@ -269,6 +270,10 @@ wifi_error wifi_initialize(wifi_handle *handle)
     wifi_add_membership(*handle, "regulatory");
     wifi_add_membership(*handle, "vendor");
 
+    if (disable) {
+        ALOGE("%s: Hacked", __func__);
+        return WIFI_ERROR_UNKNOWN; //WIFI_SUCCESS;
+    }
     if (!is_wifi_driver_loaded()) {
         ret = (wifi_error)wifi_load_driver();
         if(ret != WIFI_SUCCESS) {

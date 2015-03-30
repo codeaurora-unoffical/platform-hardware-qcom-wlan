@@ -16,8 +16,8 @@
 
 #include "sync.h"
 #include <utils/Log.h>
-#include "wifi_hal.h"
 #include "nan.h"
+#include "wifi_hal.h"
 #include "nan_i.h"
 #include "nancommand.h"
 
@@ -42,7 +42,8 @@ int NanCommand::handleNanIndication()
         memset(&publishRepliedInd, 0, sizeof(publishRepliedInd));
         res = getNanPublishReplied(&publishRepliedInd);
         if (!res && mHandler.EventPublishReplied) {
-            (*mHandler.EventPublishReplied)(&publishRepliedInd);
+            (*mHandler.EventPublishReplied)(&publishRepliedInd,
+                                            mUserData);
         }
         break;
 
@@ -51,7 +52,8 @@ int NanCommand::handleNanIndication()
         memset(&publishTerminatedInd, 0, sizeof(publishTerminatedInd));
         res = getNanPublishTerminated(&publishTerminatedInd);
         if (!res && mHandler.EventPublishTerminated) {
-            (*mHandler.EventPublishTerminated)(&publishTerminatedInd);
+            (*mHandler.EventPublishTerminated)(&publishTerminatedInd,
+                                               mUserData);
         }
         break;
 
@@ -60,7 +62,7 @@ int NanCommand::handleNanIndication()
         memset(&matchInd, 0, sizeof(matchInd));
         res = getNanMatch(&matchInd);
         if (!res && mHandler.EventMatch) {
-            (*mHandler.EventMatch)(&matchInd);
+            (*mHandler.EventMatch)(&matchInd, mUserData);
         }
         break;
 
@@ -69,7 +71,7 @@ int NanCommand::handleNanIndication()
         memset(&unMatchInd, 0, sizeof(unMatchInd));
         res = getNanUnMatch(&unMatchInd);
         if (!res && mHandler.EventUnMatch) {
-            (*mHandler.EventUnMatch)(&unMatchInd);
+            (*mHandler.EventUnMatch)(&unMatchInd, mUserData);
         }
         break;
 
@@ -78,7 +80,8 @@ int NanCommand::handleNanIndication()
         memset(&subscribeTerminatedInd, 0, sizeof(subscribeTerminatedInd));
         res = getNanSubscribeTerminated(&subscribeTerminatedInd);
         if (!res && mHandler.EventSubscribeTerminated) {
-            (*mHandler.EventSubscribeTerminated)(&subscribeTerminatedInd);
+            (*mHandler.EventSubscribeTerminated)(&subscribeTerminatedInd,
+                                                 mUserData);
         }
         break;
 
@@ -87,7 +90,8 @@ int NanCommand::handleNanIndication()
         memset(&discEngEventInd, 0, sizeof(discEngEventInd));
         res = getNanDiscEngEvent(&discEngEventInd);
         if (!res && mHandler.EventDiscEngEvent) {
-            (*mHandler.EventDiscEngEvent)(&discEngEventInd);
+            (*mHandler.EventDiscEngEvent)(&discEngEventInd,
+                                          mUserData);
         }
         break;
 
@@ -96,7 +100,8 @@ int NanCommand::handleNanIndication()
         memset(&followupInd, 0, sizeof(followupInd));
         res = getNanFollowup(&followupInd);
         if (!res && mHandler.EventFollowup) {
-            (*mHandler.EventFollowup)(&followupInd);
+            (*mHandler.EventFollowup)(&followupInd,
+                                      mUserData);
         }
         break;
 
@@ -105,7 +110,8 @@ int NanCommand::handleNanIndication()
         memset(&disabledInd, 0, sizeof(disabledInd));
         res = getNanDisabled(&disabledInd);
         if (!res && mHandler.EventDisabled) {
-            (*mHandler.EventDisabled)(&disabledInd);
+            (*mHandler.EventDisabled)(&disabledInd,
+                                      mUserData);
         }
         break;
 
@@ -114,7 +120,8 @@ int NanCommand::handleNanIndication()
         memset(&tcaInd, 0, sizeof(tcaInd));
         res = getNanTca(&tcaInd);
         if (!res && mHandler.EventTca) {
-            (*mHandler.EventTca)(&tcaInd);
+            (*mHandler.EventTca)(&tcaInd,
+                                 mUserData);
         }
         break;
 
@@ -123,7 +130,8 @@ int NanCommand::handleNanIndication()
         memset(&beaconSdfPayloadInd, 0, sizeof(beaconSdfPayloadInd));
         res = getNanBeaconSdfPayload(&beaconSdfPayloadInd);
         if (!res && mHandler.EventSdfPayload) {
-            (*mHandler.EventSdfPayload)(&beaconSdfPayloadInd);
+            (*mHandler.EventSdfPayload)(&beaconSdfPayloadInd,
+                                        mUserData);
         }
         break;
 
@@ -256,8 +264,8 @@ int NanCommand::getNanPublishReplied(NanPublishRepliedInd *event)
             /* Populate further availability bitmap from
                received TLV */
             ret = getNanFurtherAvailabilityMap(outputTlv.value,
-                                                   outputTlv.length,
-                                                   &event->fam);
+                                               outputTlv.length,
+                                               &event->fam);
             if (ret == 0) {
                 event->is_fam_valid = 1;
             }
@@ -403,8 +411,8 @@ int NanCommand::getNanMatch(NanMatchInd *event)
             /* Populate further availability bitmap from
                received TLV */
             ret = getNanFurtherAvailabilityMap(outputTlv.value,
-                                                   outputTlv.length,
-                                                   &event->fam);
+                                               outputTlv.length,
+                                               &event->fam);
             if (ret == 0) {
                 event->is_fam_valid = 1;
             }
@@ -874,34 +882,34 @@ int NanCommand::getNanFurtherAvailabilityMap(const u8 *pInValue,
                                              NanFurtherAvailabilityMap *pFam)
 {
 #ifdef NAN_2_0
-    if ((length <= NAN_FURTHER_AVAILABILITY_MAP_SIZE) ||
-        pInValue == NULL) {
-        ALOGE("%s: Invalid Arg TLV Len %d < %d", __func__,
-              length, NAN_FURTHER_AVAILABILITY_MAP_SIZE);
+    int idx = 0;
+
+    if ((length == 0) || pInValue == NULL) {
+        ALOGE("%s: Invalid Arg TLV Len %d or pInValue NULL",
+              __func__, length);
         return -1;
     }
 
     pFam->numchans = pInValue[0];
-    pFam->entry_control = (NanAvailDuration)(pInValue[1] & 0x03);
-    pFam->class_val = pInValue[2];
-    pFam->channel = pInValue[3];
-    pFam->mapid = (pInValue[1] >> 2) & 0x0F;
-    memcpy(&pFam->avail_interval_bitmap,
-           &pInValue[4],
-           sizeof(pFam->avail_interval_bitmap));
-    pFam->vendor_elements_len = 0;
-    if (pFam->numchans > 1) {
-        pFam->vendor_elements_len = length - \
-            NAN_FURTHER_AVAILABILITY_MAP_SIZE;
-        if (pFam->vendor_elements_len > NAN_MAX_VSA_DATA_LEN) {
-            pFam->vendor_elements_len = NAN_MAX_VSA_DATA_LEN;
-        }
-        memcpy(pFam->vendor_elements, &pInValue[8],
-               pFam->vendor_elements_len);
+    if (pFam->numchans > NAN_MAX_FAM_CHANNELS) {
+        ALOGE("%s: Unable to accommodate numchans %d",
+              __func__, pFam->numchans);
+        return -1;
     }
-    else {
-        memset(pFam->vendor_elements, 0,
-               sizeof(pFam->vendor_elements));
+    for (idx = 0; idx < pFam->numchans; idx++) {
+        pNanFurtherAvailabilityChan pRsp = \
+              (pNanFurtherAvailabilityChan)((u8*)pInValue[1] + \
+              (idx * sizeof(NanFurtherAvailabilityChan)));
+        NanFurtherAvailabilityChannel *pFamChan = &pFam->famchan[idx];
+
+        pFamChan->entry_control = \
+            (NanAvailDuration)(pRsp->entryCtrl.availIntDuration);
+        pFamChan->mapid = pRsp->entryCtrl.mapId;
+        pFamChan->class_val = pRsp->opClass;
+        pFamChan->channel = pRsp->channel;
+        memcpy(&pFamChan->avail_interval_bitmap,
+               &pRsp->availIntBitmap,
+               sizeof(pFamChan->avail_interval_bitmap));
     }
 #endif /* NAN_2_0*/
     return 0;

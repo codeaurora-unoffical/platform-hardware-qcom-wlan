@@ -1074,14 +1074,17 @@ int GScanCommandEventHandler::handleEvent(WifiEvent &event)
                 (*mHandler.on_significant_change)(reqId,
                                               mSignificantChangeNumResults,
                                               mSignificantChangeResults);
-                /* Reset flag and num counter. */
-                for (index = 0; index  < mSignificantChangeNumResults; index++)
-                {
-                    free(mSignificantChangeResults[index]);
-                    mSignificantChangeResults[index] = NULL;
+                if (mSignificantChangeResults) {
+                    /* Reset flag and num counter. */
+                    for (index = 0; index < mSignificantChangeNumResults;
+                         index++)
+                    {
+                        free(mSignificantChangeResults[index]);
+                        mSignificantChangeResults[index] = NULL;
+                    }
+                    free(mSignificantChangeResults);
+                    mSignificantChangeResults = NULL;
                 }
-                free(mSignificantChangeResults);
-                mSignificantChangeResults = NULL;
                 mSignificantChangeNumResults = 0;
                 mSignificantChangeMoreData = false;
             }
@@ -1168,15 +1171,17 @@ int GScanCommandEventHandler::handleEvent(WifiEvent &event)
 
             case QCA_NL80211_VENDOR_SUBCMD_GSCAN_SIGNIFICANT_CHANGE:
             {
-                for (i = 0; i < mSignificantChangeNumResults; i++)
-                {
-                    if (mSignificantChangeResults[i]) {
-                        free(mSignificantChangeResults[i]);
-                        mSignificantChangeResults[i] = NULL;
+                if (mSignificantChangeResults) {
+                    for (i = 0; i < mSignificantChangeNumResults; i++)
+                    {
+                        if (mSignificantChangeResults[i]) {
+                            free(mSignificantChangeResults[i]);
+                            mSignificantChangeResults[i] = NULL;
+                        }
                     }
+                    free(mSignificantChangeResults);
+                    mSignificantChangeResults = NULL;
                 }
-                free(mSignificantChangeResults);
-                mSignificantChangeResults = NULL;
                 mSignificantChangeNumResults = 0;
                 mSignificantChangeMoreData = false;
             }

@@ -16,8 +16,8 @@
 
 #include "sync.h"
 #include <utils/Log.h>
-#include "wifi_hal.h"
 #include "nan.h"
+#include "wifi_hal.h"
 #include "nan_i.h"
 #include "nancommand.h"
 
@@ -270,7 +270,7 @@ int NanCommand::handleNanResponse()
     }
     //Call the NotifyResponse Handler
     if (ret == 0 && mHandler.NotifyResponse) {
-        (*mHandler.NotifyResponse)(&rsp_data);
+        (*mHandler.NotifyResponse)(&rsp_data, mUserData);
     }
     return ret;
 }

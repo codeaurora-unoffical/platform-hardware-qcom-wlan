@@ -24,6 +24,7 @@
 #include "common.h"
 #include "cpp_bindings.h"
 #include "llstatscommand.h"
+#include "vendor_definitions.h"
 
 //Singleton Static Instance
 LLStatsCommand* LLStatsCommand::mLLStatsCommandInstance  = NULL;
@@ -921,11 +922,8 @@ int LLStatsCommand::handleEvent(WifiEvent &event)
                             free(mResultsParams.radio_stat);
                             mResultsParams.radio_stat = NULL;
                         }
-                        if(mResultsParams.iface_stat)
-                        {
-                            free(mResultsParams.iface_stat);
-                            mResultsParams.iface_stat = NULL;
-                        }
+                        free(mResultsParams.iface_stat);
+                        mResultsParams.iface_stat = NULL;
                     }
                 }
             }
@@ -989,7 +987,8 @@ int LLStatsCommand::handleEvent(WifiEvent &event)
                     }
 
                     memset(pIfaceStat, 0, resultsBufSize);
-                    memcpy ( pIfaceStat, mResultsParams.iface_stat , sizeof(wifi_iface_stat));
+                    if(mResultsParams.iface_stat)
+                        memcpy ( pIfaceStat, mResultsParams.iface_stat , sizeof(wifi_iface_stat));
                     wifi_peer_info *pPeerStats;
                     pIfaceStat->num_peers = numPeers;
 

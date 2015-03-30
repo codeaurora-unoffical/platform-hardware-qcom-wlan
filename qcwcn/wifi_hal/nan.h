@@ -44,8 +44,6 @@ typedef int NanVersion;
 #define NAN_MAJOR_VERSION               2
 #define NAN_MINOR_VERSION               0
 #define NAN_MICRO_VERSION               0
-#define NAN_TRANSMIT_POST_CONNECTIVITY_CAPABILITY_SIZE 4
-#define NAN_FURTHER_AVAILABILITY_MAP_SIZE 8
 #define NAN_MAX_SOCIAL_CHANNEL 3
 
 /* NAN Maximum Lengths */
@@ -56,6 +54,7 @@ typedef int NanVersion;
 #define NAN_MAX_MESH_DATA_LEN                   32
 #define NAN_MAX_CLUSTER_ATTRIBUTE_LEN           255
 #define NAN_MAX_SUBSCRIBE_MAX_ADDRESS           42
+#define NAN_MAX_FAM_CHANNELS                    32
 
 /*
   Definition of various NanRequestType
@@ -488,16 +487,9 @@ typedef enum {
     NAN_DURATION_32MS = 1,
     NAN_DURATION_64MS = 2
 } NanAvailDuration;
-/*
-  Further availability map which can sent and received from
-  Discovery engine
-*/
+
+/* Further availability per channel information */
 typedef struct {
-    /*
-       Number of channels indicates the number of entries
-       in vector which is part of fam
-    */
-    u8 numchans;
     /* Defined above */
     NanAvailDuration entry_control;
     /*
@@ -541,9 +533,19 @@ typedef struct {
        - Duration field is equal to 2, AIB [0], AIB [1], AIB [2] and AIB [3] are valid
     */
     u32 avail_interval_bitmap;
-    /* Additional Vendor elements if numchans > 1*/
-    u32 vendor_elements_len;
-    u8 vendor_elements[NAN_MAX_VSA_DATA_LEN];
+} NanFurtherAvailabilityChannel;
+
+/*
+  Further availability map which can be sent and received from
+  Discovery engine
+*/
+typedef struct {
+    /*
+       Number of channels indicates the number of channel
+       entries which is part of fam
+    */
+    u8 numchans;
+    NanFurtherAvailabilityChannel famchan[NAN_MAX_FAM_CHANNELS];
 } NanFurtherAvailabilityMap;
 
 /*
@@ -1667,18 +1669,29 @@ typedef struct {
 /* Response and Event Callbacks */
 typedef struct {
     /* NotifyResponse invoked to notify the status of the Request */
-    void (*NotifyResponse)(NanResponseMsg* rsp_data);
+    void (*NotifyResponse)(NanResponseMsg* rsp_data,
+                           void* userdata);
     /* Various Events Callback */
-    void (*EventPublishReplied)(NanPublishRepliedInd* event);
-    void (*EventPublishTerminated)(NanPublishTerminatedInd* event);
-    void (*EventMatch) (NanMatchInd* event);
-    void (*EventUnMatch) (NanUnmatchInd* event);
-    void (*EventSubscribeTerminated) (NanSubscribeTerminatedInd* event);
-    void (*EventFollowup) (NanFollowupInd* event);
-    void (*EventDiscEngEvent) (NanDiscEngEventInd* event);
-    void (*EventDisabled) (NanDisabledInd* event);
-    void (*EventTca) (NanTCAInd* event);
-    void (*EventSdfPayload) (NanBeaconSdfPayloadInd* event);
+    void (*EventPublishReplied)(NanPublishRepliedInd* event,
+                                void* userdata);
+    void (*EventPublishTerminated)(NanPublishTerminatedInd* event,
+                                   void* userdata);
+    void (*EventMatch) (NanMatchInd* event,
+                        void* userdata);
+    void (*EventUnMatch) (NanUnmatchInd* event,
+                          void* userdata);
+    void (*EventSubscribeTerminated) (NanSubscribeTerminatedInd* event,
+                                      void* userdata);
+    void (*EventFollowup) (NanFollowupInd* event,
+                           void* userdata);
+    void (*EventDiscEngEvent) (NanDiscEngEventInd* event,
+                               void* userdata);
+    void (*EventDisabled) (NanDisabledInd* event,
+                           void* userdata);
+    void (*EventTca) (NanTCAInd* event,
+                      void* userdata);
+    void (*EventSdfPayload) (NanBeaconSdfPayloadInd* event,
+                             void* userdata);
 } NanCallbackHandler;
 
 
@@ -1751,7 +1764,8 @@ wifi_error nan_get_sta_parameter(wifi_request_id id,
 
 /*  Function to register NAN callback */
 wifi_error nan_register_handler(wifi_handle handle,
-                                NanCallbackHandler handlers);
+                                NanCallbackHandler handlers,
+                                void* userdata);
 
 /*  Function to get version of the NAN HAL */
 wifi_error nan_get_version(wifi_handle handle,

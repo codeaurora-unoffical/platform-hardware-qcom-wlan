@@ -260,6 +260,8 @@ wifi_error wifi_initialize(wifi_handle *handle)
     }
     ALOGI("%s: family_id:%d", __func__, info->nl80211_family_id);
 
+    pthread_mutex_init(&info->cb_lock, NULL);
+
     *handle = (wifi_handle) info;
 
     wifi_add_membership(*handle, "scan");
@@ -290,6 +292,15 @@ wifi_error wifi_initialize(wifi_handle *handle)
 
     iface_handle = wifi_get_iface_handle((info->interfaces[0])->handle,
             (info->interfaces[0])->name);
+    if (iface_handle == NULL) {
+        int i;
+        for (i = 0; i < info->num_interfaces; i++)
+        {
+            free(info->interfaces[i]);
+        }
+        ALOGE("%s no iface with %s\n", __func__, info->interfaces[0]->name);
+        return WIFI_ERROR_UNKNOWN;
+    }
     ret = acquire_supported_features(iface_handle,
             &info->supported_feature_set);
     if (ret != WIFI_SUCCESS) {
@@ -341,6 +352,7 @@ static void internal_cleaned_up_handler(wifi_handle handle)
     }
 
     (*cleaned_up_handler)(handle);
+    pthread_mutex_destroy(&info->cb_lock);
     free(info);
 
     ALOGI("Internal cleanup completed");
@@ -449,6 +461,9 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
     // event.log();
 
     bool dispatched = false;
+
+    pthread_mutex_lock(&info->cb_lock);
+
     for (int i = 0; i < info->num_event_cb; i++) {
         if (cmd == info->event_cb[i].nl_cmd) {
             if (cmd == NL80211_CMD_VENDOR
@@ -460,8 +475,11 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
             }
 
             cb_info *cbi = &(info->event_cb[i]);
+            pthread_mutex_unlock(&info->cb_lock);
             (*(cbi->cb_func))(msg, cbi->cb_arg);
             dispatched = true;
+
+            return NL_OK;
         }
     }
 
@@ -469,6 +487,7 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
         ALOGI("event ignored!!");
     }
 
+    pthread_mutex_unlock(&info->cb_lock);
     return NL_OK;
 }
 
@@ -574,7 +593,7 @@ static bool is_wifi_interface(const char *name)
 
 static int get_interface(const char *name, interface_info *info)
 {
-    strcpy(info->name, name);
+    strlcpy(info->name, name, (IFNAMSIZ + 1));
     info->id = if_nametoindex(name);
     // ALOGI("found an interface : %s, id = %d", name, info->id);
     return WIFI_SUCCESS;
@@ -606,6 +625,10 @@ wifi_error wifi_init_interfaces(wifi_handle handle)
         return WIFI_ERROR_UNKNOWN;
 
     info->interfaces = (interface_info **)malloc(sizeof(interface_info *) * n);
+    if (info->interfaces == NULL) {
+        ALOGE("%s: Error info->interfaces NULL", __func__);
+        return WIFI_ERROR_OUT_OF_MEMORY;
+    }
 
     int i = 0;
     while ((de = readdir(d))) {
@@ -614,6 +637,15 @@ wifi_error wifi_init_interfaces(wifi_handle handle)
         if (is_wifi_interface(de->d_name)) {
             interface_info *ifinfo
                 = (interface_info *)malloc(sizeof(interface_info));
+            if (ifinfo == NULL) {
+                ALOGE("%s: Error ifinfo NULL", __func__);
+                while (i > 0) {
+                    free(info->interfaces[i-1]);
+                    i--;
+                }
+                free(info->interfaces);
+                return WIFI_ERROR_OUT_OF_MEMORY;
+            }
             if (get_interface(de->d_name, ifinfo) != WIFI_SUCCESS) {
                 free(ifinfo);
                 continue;
@@ -647,7 +679,7 @@ wifi_error wifi_get_iface_name(wifi_interface_handle handle, char *name,
         size_t size)
 {
     interface_info *info = (interface_info *)handle;
-    strcpy(name, info->name);
+    strlcpy(name, info->name, size);
     return WIFI_SUCCESS;
 }
 

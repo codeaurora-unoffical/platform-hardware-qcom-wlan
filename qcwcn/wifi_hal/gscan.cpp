@@ -1610,8 +1610,10 @@ int GScanCommand::create() {
     if (ret < 0)
         goto out;
 
+#ifdef QC_HAL_DEBUG
      ALOGI("%s: mVendor_id = %d, Subcmd = %d.",
         __func__, mVendor_id, mSubcmd);
+#endif
 
 out:
     return ret;

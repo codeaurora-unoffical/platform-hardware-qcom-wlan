@@ -901,7 +901,6 @@ int LLStatsCommand::handleEvent(WifiEvent &event)
                 {
                     ALOGE("%s: QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_NUM_PEERS"
                             " not found", __func__);
-                    ALOGE("Expecting Peer stats event");
                 } else {
                     mResultsParams.iface_stat->num_peers =
                         nla_get_u32(tb_vendor[
@@ -910,7 +909,6 @@ int LLStatsCommand::handleEvent(WifiEvent &event)
                             mResultsParams.iface_stat->num_peers);
                     if(mResultsParams.iface_stat->num_peers == 0)
                     {
-                        ALOGE("Not Expecting Peer stats event");
                         // Number of Radios are 1 for now
                         mHandler.on_link_stats_results(mRequestId,
                                 mResultsParams.iface_stat,

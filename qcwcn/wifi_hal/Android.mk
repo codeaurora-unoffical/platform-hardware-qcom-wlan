@@ -30,9 +30,10 @@ LOCAL_C_INCLUDES += \
 	$(call include-path-for, libhardware_legacy)/hardware_legacy \
 	external/wpa_supplicant_8/src/drivers \
 	$(TARGET_OUT_HEADERS)/libwpa_client \
-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
+	$(BOARD_KERNEL_HEADER_DIR)
 
-LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+LOCAL_ADDITIONAL_DEPENDENCIES += $(BOARD_KERNEL_HEADER_DEPENDENCIES)
+
 
 LOCAL_SRC_FILES := \
 	wifi_hal.cpp \
@@ -84,9 +85,10 @@ LOCAL_C_INCLUDES += \
 	$(call include-path-for, libhardware_legacy)/hardware_legacy \
 	external/wpa_supplicant_8/src/drivers \
 	$(TARGET_OUT_HEADERS)/libwpa_client \
-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
+	$(BOARD_KERNEL_HEADER_DIR)
 
-LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+LOCAL_ADDITIONAL_DEPENDENCIES += $(BOARD_KERNEL_HEADER_DEPENDENCIES)
+
 
 LOCAL_SRC_FILES := \
 	wifi_hal.cpp \

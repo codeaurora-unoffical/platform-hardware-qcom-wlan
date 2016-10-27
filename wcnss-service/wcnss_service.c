@@ -80,6 +80,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define HEXA_A		10
 #define HEX_BASE		16
 
+#define SWOC_WEAR 9
+#define SWOC_NOWGR 10
+#define SWOC_TP_CIRC 12
+#define SWOC_NOWGR_CIRC 13
+
 #ifdef WCNSS_QMI
 #define WLAN_ADDR_SIZE   6
 unsigned char wlan_nv_mac_addr[WLAN_ADDR_SIZE];
@@ -96,6 +101,7 @@ unsigned char wlan_nv_mac_addr[WLAN_ADDR_SIZE];
 #define MAX_DATA_NVBIN_PATH_LEN (64)
 #define QRD_DYNAMIC_NV_PROP  "persist.sys.dynamic.nv"
 #define QRD_HW_PLATFORM  "QRD"
+#define MTP_HW_PLATFORM  "MTP"
 #define QRD_PLATFORM_SUBTYPE_ID  0
 #define PERSIST_NVFILE    "/persist/WCNSS_qcom_wlan_nv.bin"
 #define DATA_NVFILE_DIR   "/data/misc/wifi/nvbin/"
@@ -598,13 +604,34 @@ static int get_data_nvfile_path(char *data_nvfile_path,
 	major_hwver = SOCINFO_HWVER_MAJOR(platform_version);
 	minor_hwver = SOCINFO_HWVER_MINOR(platform_version);
 
-	snprintf(data_nvfile_path, MAX_DATA_NVBIN_PATH_LEN,
-		"%s%s_%d_0x%02x_0x%02x_0x%02x_nv.bin", DATA_NVFILE_DIR,
-		target_board_platform, soc_id, platform_subtype_id&0xff,
-		major_hwver&0xff, minor_hwver&0xff);
-	ALOGI("data_nvfile_path %s\n",
-			data_nvfile_path);
 
+	rc = get_soc_info(buf, SYSFS_HW_PLATFORM_PATH1, SYSFS_HW_PLATFORM_PATH2);
+	if (rc < 0)
+	{
+		ALOGE("get_soc_info(HW_PLATFORM) fail!\n");
+		return FAILED;
+	} else {
+		if( 0 == strncmp(buf, MTP_HW_PLATFORM, MAX_SOC_INFO_NAME_LEN))
+		{
+			ALOGI("hw_platform: %s \n", buf);
+			if(platform_subtype_id == SWOC_WEAR || platform_subtype_id == SWOC_NOWGR ||
+			platform_subtype_id == SWOC_TP_CIRC || platform_subtype_id == SWOC_NOWGR_CIRC ){
+				ALOGI("platform subtype: %d \n",platform_subtype_id);
+				snprintf(data_nvfile_path, MAX_DATA_NVBIN_PATH_LEN,
+				"%s%s_SWOC_nv.bin",DATA_NVFILE_DIR,target_board_platform );
+			}
+		} else if( 0 == strncmp(buf, QRD_HW_PLATFORM, MAX_SOC_INFO_NAME_LEN))
+		{
+			ALOGI("hw_platform: %s \n", buf);
+			snprintf(data_nvfile_path, MAX_DATA_NVBIN_PATH_LEN,
+			"%s%s_%d_0x%02x_0x%02x_0x%02x_nv.bin", DATA_NVFILE_DIR,
+			target_board_platform, soc_id, platform_subtype_id&0xff,
+			major_hwver&0xff, minor_hwver&0xff);
+		}
+	}
+
+        ALOGI("data_nvfile_path %s\n",
+                       data_nvfile_path);
 	if (stat(data_nvfile_path, pdata_nvfile_stat) != 0)
 	{
 		ALOGE("source file do not exist %s\n",
@@ -680,11 +707,11 @@ void dynamic_nv_replace()
 		ALOGE("get_soc_info(HW_PLATFORM) fail!\n");
 		return;
 	} else {
-		if( 0 != strncmp(buf, QRD_HW_PLATFORM, MAX_SOC_INFO_NAME_LEN))
-		{
-			ALOGI("dynamic nv only for QRD platform, current platform:%s.\n",
-					buf);
-			return;
+		if( 0 != strncmp(buf, MTP_HW_PLATFORM, MAX_SOC_INFO_NAME_LEN) &&
+		0 != strncmp(buf, QRD_HW_PLATFORM, MAX_SOC_INFO_NAME_LEN)) {
+	            ALOGI("dynamic nv only for MTP and QRD platform, current platform:%s\n",
+				buf);
+		    return;
 		}
 	}
 

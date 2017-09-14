@@ -142,7 +142,11 @@ int NanCommand::putNanEnable(transaction_id id, const NanEnableRequest *pReq)
         (
           pReq->config_subscribe_sid_beacon ? (SIZEOF_TLV_HDR + \
           sizeof(pReq->subscribe_sid_beacon_val)) : 0 \
-        ) ;
+        ) + \
+        (
+           pReq->config_discovery_beacon_int ? (SIZEOF_TLV_HDR + \
+           sizeof(u32)) : 0 \
+        );
     pNanEnableReqMsg pFwReq = (pNanEnableReqMsg)malloc(message_len);
     if (pFwReq == NULL) {
         cleanup();
@@ -303,6 +307,10 @@ int NanCommand::putNanEnable(transaction_id id, const NanEnableRequest *pReq)
                       sizeof(pReq->subscribe_sid_beacon_val),
                       (const u8*)&pReq->subscribe_sid_beacon_val, tlvs);
     }
+    if (pReq->config_discovery_beacon_int) {
+        tlvs = addTlv(NAN_TLV_TYPE_DB_INTERVAL, sizeof(u32),
+                      (const u8*)&pReq->discovery_beacon_interval, tlvs);
+    }
 
     mVendorData = (char*)pFwReq;
     mDataLen = message_len;
@@ -423,6 +431,10 @@ int NanCommand::putNanConfig(transaction_id id, const NanConfigRequest *pReq)
         (
            /* Always include cfg discovery indication TLV */
            SIZEOF_TLV_HDR + sizeof(u32) \
+        ) + \
+        (
+           pReq->config_discovery_beacon_int ? (SIZEOF_TLV_HDR + \
+           sizeof(u32)) : 0 \
         );
 
     if (pReq->num_config_discovery_attr) {
@@ -543,6 +555,10 @@ int NanCommand::putNanConfig(transaction_id id, const NanConfigRequest *pReq)
                       sizeof(pReq->subscribe_sid_beacon_val),
                       (const u8*)&pReq->subscribe_sid_beacon_val, tlvs);
     }
+    if (pReq->config_discovery_beacon_int) {
+        tlvs = addTlv(NAN_TLV_TYPE_DB_INTERVAL, sizeof(u32),
+                      (const u8*)&pReq->discovery_beacon_interval, tlvs);
+    }
 
     u32 config_discovery_indications;
     config_discovery_indications = (u32)(pReq->discovery_indication_cfg);
@@ -581,7 +597,8 @@ int NanCommand::putNanPublish(transaction_id id, const NanPublishRequest *pReq)
         (SIZEOF_TLV_HDR + sizeof(NanServiceAcceptPolicy)) +
         (pReq->cipher_type ? SIZEOF_TLV_HDR + sizeof(NanCsidType) : 0) +
         ((pReq->sdea_params.config_nan_data_path || pReq->sdea_params.security_cfg ||
-          pReq->sdea_params.ranging_state || pReq->sdea_params.range_report) ?
+          pReq->sdea_params.ranging_state || pReq->sdea_params.range_report ||
+          pReq->sdea_params.qos_cfg) ?
           SIZEOF_TLV_HDR + sizeof(NanFWSdeaCtrlParams) : 0) +
         ((pReq->ranging_cfg.ranging_interval_msec || pReq->ranging_cfg.config_ranging_indications ||
           pReq->ranging_cfg.distance_ingress_cm || pReq->ranging_cfg.distance_egress_cm) ?
@@ -688,7 +705,8 @@ int NanCommand::putNanPublish(transaction_id id, const NanPublishRequest *pReq)
     if (pReq->sdea_params.config_nan_data_path ||
         pReq->sdea_params.security_cfg ||
         pReq->sdea_params.ranging_state ||
-        pReq->sdea_params.range_report) {
+        pReq->sdea_params.range_report ||
+        pReq->sdea_params.qos_cfg) {
         NanFWSdeaCtrlParams pNanFWSdeaCtrlParams;
         memset(&pNanFWSdeaCtrlParams, 0, sizeof(NanFWSdeaCtrlParams));
 
@@ -711,6 +729,9 @@ int NanCommand::putNanPublish(transaction_id id, const NanPublishRequest *pReq)
         if (pReq->sdea_params.range_report) {
             pNanFWSdeaCtrlParams.range_report =
                 (((pReq->sdea_params.range_report & NAN_ENABLE_RANGE_REPORT) >> 1) ? 1 : 0);
+        }
+        if (pReq->sdea_params.qos_cfg) {
+            pNanFWSdeaCtrlParams.qos_required = pReq->sdea_params.qos_cfg;
         }
         tlvs = addTlv(NAN_TLV_TYPE_SDEA_CTRL_PARAMS, sizeof(NanFWSdeaCtrlParams),
                         (const u8*)&pNanFWSdeaCtrlParams, tlvs);
@@ -831,7 +852,8 @@ int NanCommand::putNanSubscribe(transaction_id id,
         (pReq->tx_match_filter_len ? SIZEOF_TLV_HDR + pReq->tx_match_filter_len : 0) +
         (pReq->cipher_type ? SIZEOF_TLV_HDR + sizeof(NanCsidType) : 0) +
         ((pReq->sdea_params.config_nan_data_path || pReq->sdea_params.security_cfg ||
-          pReq->sdea_params.ranging_state || pReq->sdea_params.range_report) ?
+          pReq->sdea_params.ranging_state || pReq->sdea_params.range_report ||
+          pReq->sdea_params.qos_cfg) ?
           SIZEOF_TLV_HDR + sizeof(NanFWSdeaCtrlParams) : 0) +
         ((pReq->ranging_cfg.ranging_interval_msec || pReq->ranging_cfg.config_ranging_indications ||
           pReq->ranging_cfg.distance_ingress_cm || pReq->ranging_cfg.distance_egress_cm) ?
@@ -946,7 +968,8 @@ int NanCommand::putNanSubscribe(transaction_id id,
     if (pReq->sdea_params.config_nan_data_path ||
         pReq->sdea_params.security_cfg ||
         pReq->sdea_params.ranging_state ||
-        pReq->sdea_params.range_report) {
+        pReq->sdea_params.range_report ||
+        pReq->sdea_params.qos_cfg) {
         NanFWSdeaCtrlParams pNanFWSdeaCtrlParams;
         memset(&pNanFWSdeaCtrlParams, 0, sizeof(NanFWSdeaCtrlParams));
 
@@ -969,6 +992,9 @@ int NanCommand::putNanSubscribe(transaction_id id,
         if (pReq->sdea_params.range_report) {
             pNanFWSdeaCtrlParams.range_report =
                 ((pReq->sdea_params.range_report & NAN_ENABLE_RANGE_REPORT >> 1) ? 1 : 0);
+        }
+        if (pReq->sdea_params.qos_cfg) {
+            pNanFWSdeaCtrlParams.qos_required = pReq->sdea_params.qos_cfg;
         }
         tlvs = addTlv(NAN_TLV_TYPE_SDEA_CTRL_PARAMS, sizeof(NanFWSdeaCtrlParams),
                         (const u8*)&pNanFWSdeaCtrlParams, tlvs);

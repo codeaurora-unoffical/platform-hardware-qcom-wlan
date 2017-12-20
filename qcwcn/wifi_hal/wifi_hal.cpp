@@ -608,6 +608,13 @@ wifi_error wifi_initialize(wifi_handle *handle)
         ret = WIFI_SUCCESS;
     }
 
+    ret =  wifi_get_logger_supported_feature_set(iface_handle,
+                         &info->supported_logger_feature_set);
+    if (ret != WIFI_SUCCESS) {
+        ALOGE("Failed to get supported logger featur set: %d", ret);
+        ret = WIFI_SUCCESS;
+    }
+
     ret = get_firmware_bus_max_size_supported(iface_handle);
     if (ret != WIFI_SUCCESS) {
         ALOGE("Failed to get supported bus size, error : %d", ret);
@@ -730,6 +737,18 @@ static void internal_cleaned_up_handler(wifi_handle handle)
         info->cmd_sock = NULL;
         info->event_sock = NULL;
     }
+
+    if (info->interfaces) {
+        for (int i = 0; i < info->num_interfaces; i++)
+            free(info->interfaces[i]);
+        free(info->interfaces);
+    }
+
+    if (info->cmd)
+        free(info->cmd);
+
+    if (info->event_cb)
+        free(info->event_cb);
 
     if (info->cldctx != NULL) {
         cld80211lib_cleanup(info);

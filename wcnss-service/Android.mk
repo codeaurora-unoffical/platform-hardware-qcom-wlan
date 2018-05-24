@@ -1,5 +1,4 @@
 ifneq (,$(filter arm aarch64 arm64, $(TARGET_ARCH)))
-ifneq ($(TARGET_BOARD_SUFFIX), _256)
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 LOCAL_MODULE := wcnss_service
@@ -23,5 +22,4 @@ endif #TARGET_USES_QCOM_WCNSS_QMI
 LOCAL_MODULE_TAGS := optional
 LOCAL_CFLAGS += -Wall
 include $(BUILD_EXECUTABLE)
-endif
 endif

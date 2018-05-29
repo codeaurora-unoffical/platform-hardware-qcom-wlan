@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015, 2018 The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -152,9 +152,8 @@ wifi_error wifi_start_logging(wifi_interface_handle iface,
     rb_start_logging(&info->rb_infos[ring_id], verbose_level,
                     flags, max_interval_sec, min_data_size);
 cleanup:
-    if (wifiLoggerCommand)
-        delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    delete wifiLoggerCommand;
+    return ret;
 }
 
 /*  Function to get each ring related info */
@@ -275,7 +274,7 @@ wifi_error wifi_get_logger_supported_feature_set(wifi_interface_handle iface,
 
 cleanup:
     delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    return ret;
 }
 
 /*  Function to get the data in each ring for the given ring ID.*/
@@ -344,7 +343,7 @@ wifi_error wifi_get_ring_data(wifi_interface_handle iface,
 
 cleanup:
     delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    return ret;
 }
 
 void WifiLoggerCommand::setVersionInfo(char *buffer, int buffer_size) {
@@ -408,7 +407,8 @@ wifi_error wifi_get_firmware_version(wifi_interface_handle iface,
 
 cleanup:
     delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    return ret;
+
 }
 
 /*  Function to get wlan driver version.*/
@@ -465,9 +465,10 @@ wifi_error wifi_get_driver_version(wifi_interface_handle iface,
     ret = wifiLoggerCommand->requestResponse();
     if (ret != WIFI_SUCCESS)
         ALOGE("%s: Error %d happened. ", __FUNCTION__, ret);
+
 cleanup:
     delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    return ret;
 }
 
 
@@ -541,7 +542,7 @@ wifi_error wifi_get_firmware_memory_dump(wifi_interface_handle iface,
 
 cleanup:
     delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    return ret;
 }
 
 wifi_error wifi_set_log_handler(wifi_request_id id,
@@ -1164,59 +1165,56 @@ int WifiLoggerCommand::handleResponse(WifiEvent &reply) {
 
             if (!tbVendor[
                     QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_CMD_EVENT_WAKE]) {
-                ALOGE("%s: TOTAL_CMD_EVENT_WAKE not found", __FUNCTION__);
-                break;
+                mGetWakeStats->total_cmd_event_wake = 0;
+            } else {
+                mGetWakeStats->total_cmd_event_wake = nla_get_u32(
+                    tbVendor[QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_CMD_EVENT_WAKE]);
             }
-            mGetWakeStats->total_cmd_event_wake = nla_get_u32(
-                tbVendor[QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_CMD_EVENT_WAKE]);
 
             if (mGetWakeStats->total_cmd_event_wake &&
                     mGetWakeStats->cmd_event_wake_cnt) {
                 if (!tbVendor[
                     QCA_WLAN_VENDOR_ATTR_WAKE_STATS_CMD_EVENT_WAKE_CNT_PTR]) {
-                    ALOGE("%s: CMD_EVENT_WAKE_CNT_PTR not found", __FUNCTION__);
-                    break;
+                    mGetWakeStats->cmd_event_wake_cnt_used = 0;
+                } else {
+                    len = nla_len(tbVendor[
+                            QCA_WLAN_VENDOR_ATTR_WAKE_STATS_CMD_EVENT_WAKE_CNT_PTR]);
+                    mGetWakeStats->cmd_event_wake_cnt_used =
+                            (len < mGetWakeStats->cmd_event_wake_cnt_sz) ? len :
+                                        mGetWakeStats->cmd_event_wake_cnt_sz;
+                    memcpy(mGetWakeStats->cmd_event_wake_cnt,
+                        nla_data(tbVendor[
+                            QCA_WLAN_VENDOR_ATTR_WAKE_STATS_CMD_EVENT_WAKE_CNT_PTR]),
+                        (mGetWakeStats->cmd_event_wake_cnt_used * sizeof(int)));
                 }
-                len = nla_len(tbVendor[
-                        QCA_WLAN_VENDOR_ATTR_WAKE_STATS_CMD_EVENT_WAKE_CNT_PTR]);
-                mGetWakeStats->cmd_event_wake_cnt_used =
-                        (len < mGetWakeStats->cmd_event_wake_cnt_sz) ? len :
-                                    mGetWakeStats->cmd_event_wake_cnt_sz;
-                memcpy(mGetWakeStats->cmd_event_wake_cnt,
-                    nla_data(tbVendor[
-                        QCA_WLAN_VENDOR_ATTR_WAKE_STATS_CMD_EVENT_WAKE_CNT_PTR]),
-                    (mGetWakeStats->cmd_event_wake_cnt_used * sizeof(int)));
             } else
                 mGetWakeStats->cmd_event_wake_cnt_used = 0;
 
             if (!tbVendor[
-                    QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_DRIVER_FW_LOCAL_WAKE])
-            {
-                ALOGE("%s: TOTAL_DRIVER_FW_LOCAL_WAKE not found", __FUNCTION__);
-                break;
+                    QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_DRIVER_FW_LOCAL_WAKE]) {
+                mGetWakeStats->total_driver_fw_local_wake = 0;
+            } else {
+                mGetWakeStats->total_driver_fw_local_wake = nla_get_u32(tbVendor[
+                    QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_DRIVER_FW_LOCAL_WAKE]);
             }
-            mGetWakeStats->total_driver_fw_local_wake = nla_get_u32(tbVendor[
-                QCA_WLAN_VENDOR_ATTR_WAKE_STATS_TOTAL_DRIVER_FW_LOCAL_WAKE]);
 
             if (mGetWakeStats->total_driver_fw_local_wake &&
                     mGetWakeStats->driver_fw_local_wake_cnt) {
                 if (!tbVendor[
-                    QCA_WLAN_VENDOR_ATTR_WAKE_STATS_DRIVER_FW_LOCAL_WAKE_CNT_PTR])
-                {
-                    ALOGE("%s: DRIVER_FW_LOCAL_WAKE_CNT_PTR not found",
-                        __FUNCTION__);
-                    break;
-                }
-                len = nla_len(tbVendor[
-                    QCA_WLAN_VENDOR_ATTR_WAKE_STATS_DRIVER_FW_LOCAL_WAKE_CNT_PTR]);
-                mGetWakeStats->driver_fw_local_wake_cnt_used =
-                    (len < mGetWakeStats->driver_fw_local_wake_cnt_sz) ? len :
-                                    mGetWakeStats->driver_fw_local_wake_cnt_sz;
+                    QCA_WLAN_VENDOR_ATTR_WAKE_STATS_DRIVER_FW_LOCAL_WAKE_CNT_PTR]) {
+                    mGetWakeStats->driver_fw_local_wake_cnt_used = 0;
+                } else {
+                    len = nla_len(tbVendor[
+                        QCA_WLAN_VENDOR_ATTR_WAKE_STATS_DRIVER_FW_LOCAL_WAKE_CNT_PTR]);
+                    mGetWakeStats->driver_fw_local_wake_cnt_used =
+                        (len < mGetWakeStats->driver_fw_local_wake_cnt_sz) ? len :
+                                        mGetWakeStats->driver_fw_local_wake_cnt_sz;
 
-                memcpy(mGetWakeStats->driver_fw_local_wake_cnt,
-                    nla_data(tbVendor[
-                        QCA_WLAN_VENDOR_ATTR_WAKE_STATS_DRIVER_FW_LOCAL_WAKE_CNT_PTR]),
-                    (mGetWakeStats->driver_fw_local_wake_cnt_used * sizeof(int)));
+                    memcpy(mGetWakeStats->driver_fw_local_wake_cnt,
+                        nla_data(tbVendor[
+                            QCA_WLAN_VENDOR_ATTR_WAKE_STATS_DRIVER_FW_LOCAL_WAKE_CNT_PTR]),
+                        (mGetWakeStats->driver_fw_local_wake_cnt_used * sizeof(int)));
+                }
             } else
                 mGetWakeStats->driver_fw_local_wake_cnt_used = 0;
 
@@ -1542,7 +1540,7 @@ wifi_error wifi_get_wake_reason_stats(wifi_interface_handle iface,
 
 cleanup:
     delete wifiLoggerCommand;
-    return mapKernelErrortoWifiHalError(ret);
+    return ret;
 }
 
 void WifiLoggerCommand::getWakeStatsRspParams(

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2018 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -129,6 +129,8 @@ static wifi_error process_log_extscan_capabilities(hal_info *info,
     wlan_ext_scan_capabilities_payload_type *pScanCapabilities;
     wifi_gscan_capabilities gscan_cap;
     gscan_capabilities_vendor_data_t cap_vendor_data;
+    memset(&cap_vendor_data, 0, sizeof(cap_vendor_data));
+
     tlv_log *pTlv;
     int tot_len = sizeof(wifi_ring_buffer_driver_connectivity_event);
     u8 out_buf[SCAN_CAP_ENTRY_SIZE];
@@ -136,7 +138,6 @@ static wifi_error process_log_extscan_capabilities(hal_info *info,
 
     pRingBufferEntry = (wifi_ring_buffer_entry *)&out_buf[0];
     memset(pRingBufferEntry, 0, SCAN_CAP_ENTRY_SIZE);
-    memset(&cap_vendor_data, 0, sizeof(gscan_capabilities_vendor_data_t));
     pConnectEvent = (wifi_ring_buffer_driver_connectivity_event *)
                      (pRingBufferEntry + 1);
 
@@ -700,10 +701,10 @@ static wifi_error process_roam_event(hal_info *info, u32 id,
         {
             wlan_roam_candidate_found_payload_type *pRoamCandidateFound;
             roam_candidate_found_vendor_data_t roamCandidateFoundVendata;
+            memset(&roamCandidateFoundVendata, 0,
+			sizeof(roamCandidateFoundVendata));
             pConnectEvent->event = WIFI_EVENT_ROAM_CANDIDATE_FOUND;
             pRoamCandidateFound = (wlan_roam_candidate_found_payload_type *)buf;
-            memset(&roamCandidateFoundVendata, 0,
-                   sizeof(roam_candidate_found_vendor_data_t));
             pTlv = &pConnectEvent->tlvs[0];
             pTlv = addLoggerTlv(WIFI_TAG_CHANNEL,
                                 sizeof(pRoamCandidateFound->channel),

@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -96,6 +96,7 @@ int RADIOModeCommand::handleEvent(WifiEvent &event)
     wifi_error ret = WIFI_SUCCESS;
     int num_of_mac = 0;
     wifi_mac_info mode_info;
+    memset(&mode_info, 0, sizeof(mode_info));
 
     WifiVendorCommand::handleEvent(event);
 

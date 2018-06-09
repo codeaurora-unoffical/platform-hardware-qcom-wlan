@@ -877,15 +877,10 @@ void LLStatsCommand::clearStats()
 {
     if(mResultsParams.radio_stat)
     {
-        wifi_radio_stat *radioStat = mResultsParams.radio_stat;
-        for (u8 radio = 0; radio < mNumRadios; radio++) {
-            if (radioStat->tx_time_per_levels) {
-                free(radioStat->tx_time_per_levels);
-                radioStat->tx_time_per_levels = NULL;
-            }
-            radioStat = (wifi_radio_stat *)((u8 *)radioStat +
-                sizeof(wifi_radio_stat) +  (sizeof(wifi_channel_stat) *
-                    radioStat->num_channels));
+        if (mResultsParams.radio_stat->tx_time_per_levels)
+        {
+            free(mResultsParams.radio_stat->tx_time_per_levels);
+            mResultsParams.radio_stat->tx_time_per_levels = NULL;
         }
         free(mResultsParams.radio_stat);
         mResultsParams.radio_stat = NULL;

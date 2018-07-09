@@ -411,6 +411,7 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn) {
     fn->wifi_select_tx_power_scenario = wifi_select_tx_power_scenario;
     fn->wifi_reset_tx_power_scenario = wifi_reset_tx_power_scenario;
     fn->wifi_set_qpower = wifi_set_qpower;
+    fn->wifi_set_restricted_offchannel = wifi_set_restricted_offchannel;
 
     return WIFI_SUCCESS;
 }

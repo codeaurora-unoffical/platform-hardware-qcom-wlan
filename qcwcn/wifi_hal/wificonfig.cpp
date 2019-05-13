@@ -619,7 +619,7 @@ wifi_error WiFiConfigCommand::requestEvent()
 {
     int status;
     wifi_error res = WIFI_SUCCESS;
-    struct nl_cb *cb;
+    struct nl_cb *cb = NULL;
 
     cb = nl_cb_alloc(NL_CB_DEFAULT);
     if (!cb) {
@@ -662,6 +662,7 @@ wifi_error WiFiConfigCommand::requestEvent()
             __FUNCTION__, res, mWaitforRsp);
     }
 out:
+    nl_cb_put(cb);
     /* Cleanup the mMsg */
     mMsg.destroy();
     return res;
@@ -722,5 +723,77 @@ wifi_error wifi_add_or_remove_virtual_intf(wifi_interface_handle iface,
 done:
     delete wifiConfigCommand;
     return ret;
+}
+
+/**
+ * Set latency level
+ */
+wifi_error wifi_set_latency_level(wifi_interface_handle iface,
+                                 u16 level)
+{
+    int requestId, ret = 0;
+    WiFiConfigCommand *wifiConfigCommand;
+    struct nlattr *nlData;
+    interface_info *ifaceInfo = getIfaceInfo(iface);
+    wifi_handle wifiHandle = getWifiHandle(iface);
+
+    ALOGD("%s: %d", __FUNCTION__, level);
+
+    requestId = get_requestid();
+
+    wifiConfigCommand = new WiFiConfigCommand(
+                            wifiHandle,
+                            requestId,
+                            OUI_QCA,
+                            QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION);
+
+    if (wifiConfigCommand == NULL) {
+        ALOGE("%s: Error wifiConfigCommand NULL", __FUNCTION__);
+        return WIFI_ERROR_UNKNOWN;
+    }
+
+    /* Create the NL message. */
+    ret = wifiConfigCommand->create();
+    if (ret < 0) {
+        ALOGE("%s: failed to create NL msg. Error:%d",
+            __FUNCTION__, ret);
+        goto cleanup;
+    }
+
+    /* Set the interface Id of the message. */
+    ret = wifiConfigCommand->set_iface_id(ifaceInfo->name);
+    if (ret < 0) {
+        ALOGE("%s: failed to set iface id. Error:%d",
+            __FUNCTION__, ret);
+        goto cleanup;
+    }
+
+    /* Add the vendor specific attributes for the NL command. */
+    nlData = wifiConfigCommand->attr_start(NL80211_ATTR_VENDOR_DATA);
+    if (!nlData) {
+        ALOGE("%s: failed attr_start for VENDOR_DATA. Error:%d",
+            __FUNCTION__, ret);
+        goto cleanup;
+    }
+
+    if (wifiConfigCommand->put_u16(
+        QCA_WLAN_VENDOR_ATTR_CONFIG_LATENCY_LEVEL, level)) {
+        ALOGE("%s: failed to put vendor data. Error:%d",
+            __FUNCTION__, ret);
+        goto cleanup;
+    }
+    wifiConfigCommand->attr_end(nlData);
+
+    /* Send the NL msg. */
+    wifiConfigCommand->waitForRsp(false);
+    ret = wifiConfigCommand->requestEvent();
+    if (ret != 0) {
+        ALOGE("%s: requestEvent Error:%d", __FUNCTION__, ret);
+        goto cleanup;
+    }
+
+cleanup:
+    delete wifiConfigCommand;
+    return (wifi_error)ret;
 }
 #endif

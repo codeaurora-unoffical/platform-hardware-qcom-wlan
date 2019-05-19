@@ -14,6 +14,25 @@
 
 LOCAL_PATH := $(call my-dir)
 
+# Control APIs used by clients to communicate with HAL.
+# ============================================================
+include $(CLEAR_VARS)
+
+LOCAL_CFLAGS := -Wno-unused-parameter
+LOCAL_CFLAGS += -Wall -Werror
+LOCAL_MODULE := libwifi-hal-ctrl
+LOCAL_VENDOR_MODULE := true
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/wifi_hal_ctrl
+LOCAL_SRC_FILES := wifi_hal_ctrl/wifi_hal_ctrl.c
+LOCAL_HEADER_LIBRARIES := libcutils_headers
+include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := libwifi-hal-ctrl_headers
+LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/wifi_hal_ctrl
+LOCAL_HEADER_LIBRARIES := libcutils_headers
+include $(BUILD_HEADER_LIBRARY)
+
 # Make the HAL library
 # ============================================================
 include $(CLEAR_VARS)
@@ -41,7 +60,10 @@ LOCAL_C_INCLUDES += \
 	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include \
 	$(TARGET_OUT_HEADERS)/cld80211-lib
 
+LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+
 LOCAL_SRC_FILES := \
+	list.cpp \
 	wifi_hal.cpp \
 	common.cpp \
 	cpp_bindings.cpp \
@@ -78,7 +100,8 @@ LOCAL_SHARED_LIBRARIES += libnl_2
 LOCAL_C_INCLUDES += external/libnl-headers
 endif
 
-LOCAL_HEADER_LIBRARIES := libcutils_headers libutils_headers
+LOCAL_HEADER_LIBRARIES := libcutils_headers libutils_headers libwifi-hal-ctrl_headers
+LOCAL_SANITIZE := cfi signed-integer-overflow unsigned-integer-overflow
 
 include $(BUILD_STATIC_LIBRARY)
 
@@ -108,7 +131,10 @@ LOCAL_C_INCLUDES += \
 	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include \
 	$(TARGET_OUT_HEADERS)/cld80211-lib
 
+LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+
 LOCAL_SRC_FILES := \
+	list.cpp \
 	wifi_hal.cpp \
 	common.cpp \
 	cpp_bindings.cpp \
@@ -138,6 +164,7 @@ LOCAL_VENDOR_MODULE := true
 LOCAL_CLANG := true
 LOCAL_SHARED_LIBRARIES += libnetutils liblog
 LOCAL_SHARED_LIBRARIES += libdl libwpa_client libcld80211
+LOCAL_SHARED_LIBRARIES += libwifi-hal-ctrl
 
 ifneq ($(wildcard external/libnl),)
 LOCAL_SHARED_LIBRARIES += libnl
@@ -147,5 +174,6 @@ LOCAL_SHARED_LIBRARIES += libnl_2
 LOCAL_C_INCLUDES += external/libnl-headers
 endif
 
-LOCAL_HEADER_LIBRARIES := libcutils_headers libutils_headers
+LOCAL_HEADER_LIBRARIES := libcutils_headers libutils_headers libwifi-hal-ctrl_headers
+LOCAL_SANITIZE := cfi integer_overflow
 include $(BUILD_SHARED_LIBRARY)

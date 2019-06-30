@@ -982,7 +982,7 @@ static void internal_cleaned_up_handler(wifi_handle handle)
 {
     hal_info *info = getHalInfo(handle);
     wifi_cleaned_up_handler cleaned_up_handler = info->cleaned_up_handler;
-    wifihal_mon_sock_t *reg;
+    wifihal_mon_sock_t *reg, *tmp;
 
     if (info->cmd_sock != 0) {
         nl_socket_free(info->cmd_sock);
@@ -997,10 +997,9 @@ static void internal_cleaned_up_handler(wifi_handle handle)
         info->wifihal_ctrl_sock.s = 0;
     }
 
-   list_for_each_entry(reg, &info->monitor_sockets, list) {
-        if(reg) {
-           free(reg);
-        }
+   list_for_each_entry_safe(reg, tmp, &info->monitor_sockets, list) {
+        del_from_list(&reg->list);
+        free(reg);
     }
 
     if (info->interfaces) {
@@ -1155,7 +1154,7 @@ static int send_nl_data(wifi_handle handle, wifihal_ctrl_req_t *ctrl_msg)
        ALOGE("%s: nl_send_auto_complete - failed : %d \n", __FUNCTION__, retval);
        goto nl_out;
      }
-
+     ALOGI("%s: sent gennl msg of len: %d to driver\n", __FUNCTION__, ctrl_msg->data_len);
      retval = internal_pollin_handler(handle, info->event_sock);
   }
   else if (ctrl_msg->family_name == CLD80211_FAMILY)
@@ -1174,7 +1173,7 @@ static int send_nl_data(wifi_handle handle, wifihal_ctrl_req_t *ctrl_msg)
         ALOGE("%s: send cld80211 message - failed\n", __FUNCTION__);
         goto nl_out;
       }
-      ALOGD("%s: sent cld80211 message for pid %d\n", __FUNCTION__, getpid());
+      ALOGI("%s: sent cld80211 msg of len: %d to driver\n", __FUNCTION__, ctrl_msg->data_len);
     }
     else
     {
@@ -1238,9 +1237,6 @@ static int register_monitor_sock(wifi_handle handle, wifihal_ctrl_req_t *ctrl_ms
 
          list_for_each_entry(reg, &info->monitor_sockets, list) {
 
-           if(reg == NULL)
-              break;
-
            int mlen = min(match_len, reg->match_len);
 
            if (reg->match_len == 0)
@@ -1289,8 +1285,6 @@ static int register_monitor_sock(wifi_handle handle, wifihal_ctrl_req_t *ctrl_ms
          //! if sock is not present, return error -2.
          //! if sock is present,  and cmd_id does not match, return error -2.
          //! if sock is present, and cmd_id matches, delete entry and return 0.
-         if(reg == NULL)
-            break;
 
          if (ctrl_msg->monsock_len != reg->monsock_len)
              continue;
@@ -1607,14 +1601,12 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg)
 
        list_for_each_entry(reg, &info->monitor_sockets, list) {
 
-                 if(reg == NULL)
-                    break;
-
                  if (memcmp(reg->match, buff, reg->match_len))
                      continue;
 
                  /* found match! */
                  /* Indicate the received Action frame to respective client */
+                 ALOGI("send gennl msg of len : %d to apps", ctrl_evt->data_len);
                  if (sendto(info->wifihal_ctrl_sock.s, (char *)ctrl_evt,
                             sizeof(*ctrl_evt) + ctrl_evt->data_len,
                             0, (struct sockaddr *)&reg->monsock, reg->monsock_len) < 0)

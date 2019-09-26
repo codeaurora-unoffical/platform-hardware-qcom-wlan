@@ -109,7 +109,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		}
 
 		if (os_strncasecmp(cmd + strlen("INTERFACE "), "CREATE",6) == 0) {
-			strlcpy(newIface, cmd+strlen("INTERFACE CREATE "), IFNAMSIZ);
+			os_strlcpy(newIface, cmd+strlen("INTERFACE CREATE "), IFNAMSIZ);
 			genlmsg_put(msg, 0, 0, drv->global->nl80211_id, 0, 0,
 				    NL80211_CMD_NEW_INTERFACE, 0);
 			if (nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(bss->ifname)) ||
@@ -119,7 +119,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 				goto out;
 			}
 		} else if (os_strncasecmp(cmd + strlen("INTERFACE "), "DELETE",6) == 0) {
-			strlcpy(newIface, cmd+strlen("INTERFACE DELETE "), IFNAMSIZ);
+			os_strlcpy(newIface, cmd+strlen("INTERFACE DELETE "), IFNAMSIZ);
 			genlmsg_put(msg, 0, 0,drv->global->nl80211_id, 0, 0,
 				    NL80211_CMD_DEL_INTERFACE, 0);
 			if (nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(newIface))) {

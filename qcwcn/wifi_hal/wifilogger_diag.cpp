@@ -861,7 +861,8 @@ static wifi_error process_fw_diag_msg(hal_info *info, u8* buf, u16 length)
     buf += 4;
     length -= 4;
 
-    while (length > (count + sizeof(fw_diag_msg_fixed_hdr_t))) {
+    while ((info && !info->clean_up)
+          && (length > (count + sizeof(fw_diag_msg_fixed_hdr_t)))) {
         diag_msg_fixed_hdr = (fw_diag_msg_fixed_hdr_t *)(buf + count);
         switch (diag_msg_fixed_hdr->diag_event_type) {
             case WLAN_DIAG_TYPE_EVENT:
@@ -1398,7 +1399,7 @@ static wifi_error populate_rx_aggr_stats(hal_info *info)
     wifi_ring_per_packet_status_entry *pps_entry;
     u32 index = 0;
 
-    while (index < info->rx_buf_size_occupied) {
+    while ((info && !info->clean_up) && (index < info->rx_buf_size_occupied)) {
         pps_entry = (wifi_ring_per_packet_status_entry *)(pRingBufferEntry + 1);
 
         pps_entry->MCS = info->aggr_stats.RxMCS.mcs;
@@ -2084,7 +2085,7 @@ static wifi_error parse_stats(hal_info *info, u8 *data, u32 buflen)
             data += (sizeof(wh_pktlog_hdr_t) + pkt_stats_header->size);
             buflen -= (sizeof(wh_pktlog_hdr_t) + pkt_stats_header->size);
         }
-    } while (buflen > 0);
+    } while ((info && !info->clean_up) && (buflen > 0));
 
     return status;
 }

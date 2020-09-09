@@ -83,6 +83,9 @@ int wcnss_qmi_get_wlan_address(unsigned char *pBdAddr)
 	/* clear the request content */
 	memset(&addr_req, 0, sizeof(addr_req));
 
+	/* clear the response content */
+	memset(&addr_resp, 0, sizeof(addr_resp));
+
 	/*Request to get the WLAN MAC address */
 	addr_req.device = DMS_DEVICE_MAC_WLAN_V01;
 

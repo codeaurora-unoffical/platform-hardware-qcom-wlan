@@ -889,6 +889,12 @@ wifi_error wifi_initialize(wifi_handle *handle)
         goto unload;
     }
 
+    ret = initializeRadioHandler(info);
+    if (ret != WIFI_SUCCESS) {
+        ALOGE("Initializing Radio Event handler Failed");
+        goto unload;
+    }
+
     ret = wifi_init_tcp_param_change_event_handler(iface_handle);
     if (ret != WIFI_SUCCESS) {
         ALOGE("Initializing TCP param change event Handler Failed");
@@ -928,6 +934,7 @@ unload:
             wifi_logger_ring_buffers_deinit(info);
             cleanupGscanHandlers(info);
             cleanupRSSIMonitorHandler(info);
+            cleanupRadioHandler(info);
 	    cleanupTCPParamCommand(info);
             free(info->event_cb);
             if (info->driver_supported_features.flags) {
@@ -954,6 +961,7 @@ wifi_error wifi_wait_for_driver_ready(void)
             return WIFI_SUCCESS;
         }
         usleep(POLL_DRIVER_DURATION_US);
+        ALOGE("fopen failed, reason: %s, remaining retry count %d", strerror(errno), count);
     } while(--count > 0);
 
     ALOGE("Timed out wating on Driver ready ... ");
@@ -1022,6 +1030,7 @@ static void internal_cleaned_up_handler(wifi_handle handle)
     wifi_logger_ring_buffers_deinit(info);
     cleanupGscanHandlers(info);
     cleanupRSSIMonitorHandler(info);
+    cleanupRadioHandler(info);
     cleanupTCPParamCommand(info);
 
     if (info->num_event_cb)
@@ -1783,7 +1792,8 @@ static int wifi_get_multicast_id(wifi_handle handle, const char *name,
 static bool is_wifi_interface(const char *name)
 {
     if (strncmp(name, "wlan", 4) != 0 && strncmp(name, "p2p", 3) != 0
-        && strncmp(name, "wifi", 4) != 0) {
+        && strncmp(name, "wifi", 4) != 0
+        && strncmp(name, "swlan", 5) != 0) {
         /* not a wifi interface; ignore it */
         return false;
     } else {
